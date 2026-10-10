@@ -30,11 +30,11 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 0 — Project Foundation
 **Version 0.0.0 — Foundation**
-- [ ] Repository and project structure
-- [ ] Python environment and dependencies
-- [ ] Configuration, logging, and testing setup
-- [ ] Hardware and compute assessment
-- [ ] Module interfaces
+- [x] Repository and project structure
+- [x] Python environment and dependencies
+- [x] Configuration, logging, and testing setup
+- [x] Hardware and compute assessment
+- [x] Module interfaces
 
 ### Phase 1 — Tokenizer & Model Foundation
 **Version 0.1 — Tokenizer**

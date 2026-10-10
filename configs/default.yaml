@@ -1,0 +1,13 @@
+# Default Configuration for Project Robbie
+project_name: "Project Robbie"
+version: "0.0.0"
+phase: 0
+seed: 42
+device: "auto"
+
+hardware:
+  prefer_gpu: true
+  mixed_precision: true
+
+logging:
+  level: "INFO"
