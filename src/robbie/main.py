@@ -60,10 +60,26 @@ def parse_args():
         help="Train the Phase 4 Stage 1 Base Transformer with BPE subwords on WikiText",
     )
     parser.add_argument(
+        "--train-stage2",
+        action="store_true",
+        help="Fine-tune the Phase 4 Stage 2 Conversational Transformer on assistant dialogues",
+    )
+    parser.add_argument(
+        "--chat",
+        action="store_true",
+        help="Launch an interactive terminal chat session with Robbie",
+    )
+    parser.add_argument(
         "--block-size",
         type=int,
         default=128,
         help="Context window length in tokens (default: 128)",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=None,
+        help="Stride step size between consecutive sequences (default: auto)",
     )
     parser.add_argument(
         "--no-amp",
@@ -397,6 +413,105 @@ def run_train_stage1(
     console.print(f"   Best Epoch: {history.get('best_epoch', 'N/A')} | Lowest Val Loss: {loss_disp} | Perplexity: {ppl_disp}")
     console.print("=" * 65 + "\n")
 
+def run_train_stage2(
+    epochs: int = 10,
+    batch_size: int = 16,
+    block_size: int = 128,
+    stride: int = 32,
+    learning_rate: float = 1.5e-4,
+    weight_decay: float = 0.01,
+    dropout: float = 0.1,
+    patience: Optional[int] = 3,
+    use_amp: bool = True,
+    use_cosine: bool = True,
+):
+    """Fine-tune Stage 1 Base Robbie Transformer on Stage 2 Assistant Dialogues."""
+    console = Console()
+    console.print("\n" + "=" * 65)
+    console.print("   PROJECT ROBBIE — STAGE 2 CONVERSATIONAL FINE-TUNING (v0.5)")
+    console.print(f"   Context Window: {block_size} tokens | Batch Size: {batch_size} | Stride: {stride}")
+    console.print("=" * 65 + "\n")
+
+    train_file = DATA_DIR / "processed" / "stage2" / "train.txt"
+    val_file = DATA_DIR / "processed" / "stage2" / "val.txt"
+    bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
+    stage1_base_path = CHECKPOINT_DIR / "stage1_base_transformer.pt"
+
+    # 1. Ensure Stage 1 base model exists
+    if not stage1_base_path.exists():
+        console.print(
+            f"[red]Stage 1 Base checkpoint not found at {stage1_base_path}. "
+            "Please train Stage 1 base model first: python -m robbie.main --train-stage1[/]"
+        )
+        return
+
+    # 2. Ensure dataset exists
+    if not train_file.exists() or not val_file.exists():
+        logger.info("Stage 2 dataset not found. Running dialogue dataset pipeline...")
+        from robbie.core.data import DatasetPipeline
+        pipeline = DatasetPipeline(data_root=DATA_DIR)
+        pipeline.prepare_stage2_dialogue(force=True)
+
+    # 3. Load BPE tokenizer
+    if not bpe_vocab_file.exists():
+        console.print(f"[red]BPE vocabulary file not found at {bpe_vocab_file}[/]")
+        return
+    tokenizer = BPETokenizer.load(bpe_vocab_file)
+    logger.info(f"Loaded BPE tokenizer with {tokenizer.vocab_size} tokens from {bpe_vocab_file.name}")
+
+    # 4. Load text and prepare datasets
+    logger.info("Loading preprocessed Stage 2 dialogue text files...")
+    train_text = load_text_file(train_file)
+    val_text = load_text_file(val_file)
+
+    logger.info(f"Tokenizing Stage 2 text (train: {len(train_text):,} chars, val: {len(val_text):,} chars)...")
+    train_ds, val_ds = prepare_datasets_from_splits(
+        train_text, val_text, tokenizer=tokenizer, seq_len=block_size, stride=stride
+    )
+    logger.info(f"Dataset split: {len(train_ds):,} training sequences, {len(val_ds):,} validation sequences")
+
+    # 5. Configure Model and load Stage 1 Base weights
+    config = TransformerConfig(
+        vocab_size=tokenizer.vocab_size,
+        block_size=block_size,
+        n_layer=4,
+        n_head=4,
+        n_embd=128,
+        dropout=dropout,
+    )
+    model = RobbieTransformer(config)
+    Trainer.load_checkpoint(stage1_base_path, model)
+    logger.info(f"Successfully loaded pretrained Stage 1 base weights from {stage1_base_path.name}")
+
+    # 6. Fine-tune with low learning rate and cosine decay
+    train_config = TrainingConfig(
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        grad_clip=1.0,
+        use_amp=use_amp,
+        use_cosine_lr=use_cosine,
+        checkpoint_dir=str(CHECKPOINT_DIR),
+        best_model_name="stage2_conversational_transformer.pt",
+        early_stopping_patience=patience,
+        device="auto",
+    )
+    trainer = Trainer(model, train_ds, val_ds, train_config)
+    history = trainer.fit()
+
+    best_path = CHECKPOINT_DIR / "stage2_conversational_transformer.pt"
+    best_loss = history.get("best_val_loss", "N/A")
+    loss_disp = f"{best_loss:.4f}" if isinstance(best_loss, float) else str(best_loss)
+    best_ppl = history.get("best_val_perplexity", "N/A")
+    ppl_disp = f"{best_ppl:.2f}" if isinstance(best_ppl, float) else str(best_ppl)
+
+    console.print("\n" + "=" * 65)
+    console.print("   STAGE 2 CONVERSATIONAL FINE-TUNING COMPLETE!")
+    console.print(f"   Conversational Model Saved To: [bold green]{best_path}[/]")
+    console.print(f"   Best Epoch: {history.get('best_epoch', 'N/A')} | Lowest Val Loss: {loss_disp} | Perplexity: {ppl_disp}")
+    console.print("=" * 65 + "\n")
+
 def run_inspect_baseline():
     """Execute all 4 baseline verification checks."""
     console = Console()
@@ -503,13 +618,17 @@ def run_generate(
         is_transformer = any("blocks" in k for k in state_keys)
         model_type = "transformer" if is_transformer else "tiny"
     else:
+        stage2_ckpt = CHECKPOINT_DIR / "stage2_conversational_transformer.pt"
         stage1_ckpt = CHECKPOINT_DIR / "stage1_base_transformer.pt"
         transformer_ckpt = CHECKPOINT_DIR / "best_transformer.pt"
         tiny_ckpt = CHECKPOINT_DIR / "best_model.pt"
 
         # Auto select model type
         if model_type == "auto":
-            if stage1_ckpt.exists():
+            if stage2_ckpt.exists():
+                selected_ckpt = stage2_ckpt
+                model_type = "transformer"
+            elif stage1_ckpt.exists():
                 selected_ckpt = stage1_ckpt
                 model_type = "transformer"
             elif transformer_ckpt.exists():
@@ -522,7 +641,12 @@ def run_generate(
                 print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-stage1")
                 return
         elif model_type == "transformer":
-            selected_ckpt = stage1_ckpt if stage1_ckpt.exists() else transformer_ckpt
+            if stage2_ckpt.exists():
+                selected_ckpt = stage2_ckpt
+            elif stage1_ckpt.exists():
+                selected_ckpt = stage1_ckpt
+            else:
+                selected_ckpt = transformer_ckpt
         else:
             selected_ckpt = tiny_ckpt
 
@@ -530,7 +654,7 @@ def run_generate(
     saved_config = raw_data.get("config", None)
     bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
     is_bpe = bpe_vocab_file.exists() and (
-        "stage1" in selected_ckpt.name
+        "stage" in selected_ckpt.name
         or (saved_config is not None and getattr(saved_config, "vocab_size", 0) > 500)
     )
 
@@ -576,13 +700,111 @@ def run_generate(
     print(f"\n[Checkpoint]: {selected_ckpt.name} | [Seed]: {seed_str}")
     print(f"[Prompt]: \"{prompt}\"")
     print(f"[Generating with temperature {temperature}...]\n")
-    generated_tensor = model.generate(input_tensor, max_new_tokens=max_tokens, temperature=temperature, top_k=20)
+    stop_id = tokenizer.eos_token_id if is_bpe else None
+    generated_tensor = model.generate(
+        input_tensor,
+        max_new_tokens=max_tokens,
+        temperature=temperature,
+        top_k=20,
+        stop_token_id=stop_id,
+    )
     generated_ids = generated_tensor[0].tolist()
     generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
 
     print("-" * 50)
     print(generated_text)
     print("-" * 50 + "\n")
+
+def run_chat(
+    checkpoint: Optional[str] = None,
+    max_tokens: int = 100,
+    temperature: float = 0.7,
+    seed: Optional[int] = None,
+):
+    """Launch interactive terminal chat session with Robbie."""
+    console = Console()
+    console.print("\n" + "=" * 60)
+    console.print("   PROJECT ROBBIE — INTERACTIVE CHAT (v0.5)")
+    console.print("   Type your message and press Enter.")
+    console.print("   Type 'exit' or 'quit' to end the session.")
+    console.print("=" * 60 + "\n")
+
+    stage2_ckpt = CHECKPOINT_DIR / "stage2_conversational_transformer.pt"
+    stage1_ckpt = CHECKPOINT_DIR / "stage1_base_transformer.pt"
+    bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
+
+    if checkpoint is not None:
+        selected_ckpt = Path(checkpoint)
+    elif stage2_ckpt.exists():
+        selected_ckpt = stage2_ckpt
+    elif stage1_ckpt.exists():
+        selected_ckpt = stage1_ckpt
+    else:
+        console.print("[red]No trained transformer checkpoint found. Train first with: python -m robbie.main --train-stage2[/]")
+        return
+
+    if not bpe_vocab_file.exists():
+        console.print(f"[red]BPE vocabulary file not found at {bpe_vocab_file}[/]")
+        return
+
+    tokenizer = BPETokenizer.load(bpe_vocab_file)
+    raw_data = torch.load(selected_ckpt, map_location="cpu", weights_only=False)
+    saved_config = raw_data.get("config", None)
+    block_size = getattr(saved_config, "block_size", 128) if saved_config else 128
+
+    config = saved_config if isinstance(saved_config, TransformerConfig) else TransformerConfig(
+        vocab_size=tokenizer.vocab_size,
+        block_size=block_size,
+        n_layer=4,
+        n_head=4,
+        n_embd=128,
+    )
+    device = get_best_device()
+    model = RobbieTransformer(config)
+    Trainer.load_checkpoint(selected_ckpt, model)
+    model.to(device)
+    model.eval()
+
+    console.print(f"[dim]Loaded model: {selected_ckpt.name} on {str(device).upper()}[/]\n")
+
+    while True:
+        try:
+            user_input = input("You: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Session closed. Goodbye![/]")
+            break
+
+        if not user_input:
+            continue
+        if user_input.lower() in ("exit", "quit", "q"):
+            console.print("[dim]Goodbye![/]")
+            break
+
+        prompt = f"User: {user_input}\nRobbie:"
+        prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
+        input_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+
+        if seed is not None:
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+
+        generated_tensor = model.generate(
+            input_tensor,
+            max_new_tokens=max_tokens,
+            temperature=temperature,
+            top_k=25,
+            stop_token_id=tokenizer.eos_token_id,
+        )
+        gen_ids = generated_tensor[0].tolist()[len(prompt_ids):]
+        response_text = tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
+
+        if "\nUser:" in response_text:
+            response_text = response_text.split("\nUser:")[0].strip()
+        if "<|endoftext|>" in response_text:
+            response_text = response_text.split("<|endoftext|>")[0].strip()
+
+        console.print(f"[bold cyan]Robbie:[/] {response_text}\n")
 
 def main():
     args = parse_args()
@@ -624,6 +846,27 @@ def main():
             patience=args.patience,
             use_amp=not args.no_amp,
             use_cosine=not args.no_cosine,
+        )
+
+    if args.train_stage2:
+        run_train_stage2(
+            epochs=args.epochs if args.epochs != 5 else 10,
+            batch_size=args.batch_size if args.batch_size != 64 else 16,
+            block_size=args.block_size,
+            stride=args.stride if args.stride is not None else 32,
+            dropout=args.dropout,
+            weight_decay=args.weight_decay,
+            patience=args.patience,
+            use_amp=not args.no_amp,
+            use_cosine=not args.no_cosine,
+        )
+
+    if args.chat:
+        run_chat(
+            checkpoint=args.checkpoint,
+            max_tokens=args.max_tokens,
+            temperature=args.temperature,
+            seed=args.seed,
         )
 
     if args.compare_checkpoints:

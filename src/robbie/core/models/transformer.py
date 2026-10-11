@@ -127,6 +127,7 @@ class RobbieTransformer(nn.Module):
         max_new_tokens: int = 60,
         temperature: float = 0.8,
         top_k: Optional[int] = 40,
+        stop_token_id: Optional[int] = None,
     ) -> torch.Tensor:
         """Autoregressively sample tokens conditioned on input prompt."""
         self.eval()
@@ -152,5 +153,8 @@ class RobbieTransformer(nn.Module):
                 idx_next = torch.multinomial(probs, num_samples=1)
 
             idx = torch.cat((idx, idx_next), dim=1)
+
+            if stop_token_id is not None and (idx_next == stop_token_id).all():
+                break
 
         return idx

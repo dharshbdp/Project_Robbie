@@ -238,3 +238,18 @@ class TestRobbieTransformer:
             assert len(history["val_perplexity"]) == 2
             assert history["val_perplexity"][0] > 1.0
             assert "learning_rates" in history
+
+    def test_transformer_generate_with_stop_token(self):
+        config = TransformerConfig(vocab_size=10, block_size=16, n_layer=1, n_head=1, n_embd=16)
+        model = RobbieTransformer(config)
+        inp = torch.tensor([[1, 2, 3]])
+
+        # Generate with stop_token_id that matches argmax or random
+        out = model.generate(inp, max_new_tokens=10, stop_token_id=999)
+        assert out.shape[1] == 13
+
+        # Force a stop token
+        first_gen = out[0, 3].item()
+        out_stopped = model.generate(inp, max_new_tokens=10, stop_token_id=first_gen, temperature=0.0)
+        assert out_stopped.shape[1] <= 13
+

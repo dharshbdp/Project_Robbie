@@ -84,14 +84,14 @@ class DatasetPipeline:
         logger.info(f"[Stage 1] Preparation complete! Train: {train_stats['character_count']:,} chars, Val: {val_stats['character_count']:,} chars")
         return metadata
 
-    def prepare_stage2_dialogue(self, train_ratio: float = 0.85) -> Dict[str, Any]:
+    def prepare_stage2_dialogue(self, train_ratio: float = 0.85, force: bool = False) -> Dict[str, Any]:
         """Format, clean, and split Stage 2 Conversational & Assistant instruction data."""
         stage2_raw = self.raw_dir / "stage2_dialogue"
         stage2_processed = self.processed_dir / "stage2"
         stage2_processed.mkdir(parents=True, exist_ok=True)
 
         logger.info("[Stage 2] Fetching conversational dialogue data...")
-        raw_dialogue_file = fetch_stage2_dialogue_data(stage2_raw)
+        raw_dialogue_file = fetch_stage2_dialogue_data(stage2_raw, force=force)
 
         # Parse JSONL conversations
         conversations: List[str] = []

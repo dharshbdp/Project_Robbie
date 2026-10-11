@@ -85,6 +85,72 @@ STAGE2_ASSISTANT_DIALOGUES = [
             {"role": "assistant", "content": "Byte-Pair Encoding (BPE) is a subword tokenization algorithm. It begins with individual characters and iteratively merges the most frequently occurring pairs of characters or subwords into new tokens. This allows common words to be represented by a single token while rare words are broken down into familiar syllables, keeping vocabulary size compact and eliminating out-of-vocabulary errors."},
         ]
     },
+    {
+        "conversation": [
+            {"role": "user", "content": "Hello Robbie, how are you today?"},
+            {"role": "assistant", "content": "Hello! I am doing well, ready to help you write code, explore machine learning, and work on our project. What can we build together today?"},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "Who are you?"},
+            {"role": "assistant", "content": "I am Robbie, an autonomous AI companion and coding assistant designed to pair program, answer questions, and solve technical challenges with you."},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "What is a Python dictionary and how fast is it?"},
+            {"role": "assistant", "content": "A Python dictionary is a hash table that maps unique keys to values. Because keys are hashed to calculate memory indices, looking up, inserting, or deleting items takes O(1) average time complexity."},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "How do I safely read a file in Python?"},
+            {"role": "assistant", "content": "Always use a context manager ('with open(...) as f:'). It ensures the file handle is automatically closed even if an exception occurs:\n\n```python\nwith open('data.txt', 'r', encoding='utf-8') as f:\n    content = f.read()\n```"},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "What is causal masking in a transformer?"},
+            {"role": "assistant", "content": "A causal mask is an upper-triangular matrix of negative infinity values added to attention scores before softmax. It prevents tokens at position t from attending to future tokens at t+1, ensuring the autoregressive model only learns from past context."},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "What does sampling temperature do during text generation?"},
+            {"role": "assistant", "content": "Temperature scales the logits before softmax: 'logits / T'. A lower temperature (e.g. 0.2) sharpens the probability distribution, making output more deterministic and conservative. A higher temperature (e.g. 0.8 to 1.0) flattens the distribution, increasing diversity and creativity."},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "Why is gradient clipping used during training?"},
+            {"role": "assistant", "content": "Gradient clipping caps the global norm of parameter gradients at a specified threshold (e.g. 1.0). This prevents exploding gradients from destabilizing the optimizer or causing NaN values during backpropagation."},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "What is the role of the learning rate schedule?"},
+            {"role": "assistant", "content": "A learning rate schedule adjusts step sizes dynamically throughout training. A warmup phase gradually ramps up the rate to prevent early divergence, while cosine decay gradually reduces the rate to allow fine, stable convergence into sharp loss minima."},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "Can you explain recursion simply?"},
+            {"role": "assistant", "content": "Recursion is a programming technique where a function solves a problem by calling itself with smaller inputs until it reaches a defined base case that stops the recursion."},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "How do I write a list comprehension in Python?"},
+            {"role": "assistant", "content": "A list comprehension creates a new list by applying an expression to items in an iterable. For example: `squares = [x ** 2 for x in range(10) if x % 2 == 0]` creates a list of squares of even numbers."},
+        ]
+    },
+    {
+        "conversation": [
+            {"role": "user", "content": "Thank you for the help, Robbie!"},
+            {"role": "assistant", "content": "You are very welcome! If you have any other questions or need help debugging code, I am always here to assist."},
+        ]
+    },
 ]
 
 
@@ -127,12 +193,12 @@ def fetch_stage1_pretrain_data(raw_dir: Path, allow_download: bool = True) -> Tu
     return train_dest, val_dest
 
 
-def fetch_stage2_dialogue_data(raw_dir: Path) -> Path:
+def fetch_stage2_dialogue_data(raw_dir: Path, force: bool = False) -> Path:
     """Acquire or export Stage 2 Conversational & Assistant instruction data."""
     raw_dir.mkdir(parents=True, exist_ok=True)
     dest_file = raw_dir / "assistant_dialogues.jsonl"
 
-    if not dest_file.exists() or dest_file.stat().st_size == 0:
+    if not dest_file.exists() or dest_file.stat().st_size == 0 or force:
         logger.info(f"Writing curated Stage 2 assistant dialogues to {dest_file}")
         with open(dest_file, "w", encoding="utf-8") as f:
             for item in STAGE2_ASSISTANT_DIALOGUES:
