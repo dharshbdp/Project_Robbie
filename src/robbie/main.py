@@ -549,6 +549,12 @@ def run_train_stage2(
     history = trainer.fit()
 
     best_path = CHECKPOINT_DIR / save_ckpt_name
+    latest_path = CHECKPOINT_DIR / "latest_model.pt"
+    # Ensure the conversational checkpoint retains the fully aligned weights
+    if latest_path.exists():
+        import shutil
+        shutil.copy2(latest_path, best_path)
+
     best_loss = history.get("best_val_loss", "N/A")
     loss_disp = f"{best_loss:.4f}" if isinstance(best_loss, float) else str(best_loss)
     best_ppl = history.get("best_val_perplexity", "N/A")
