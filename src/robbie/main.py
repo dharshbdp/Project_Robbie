@@ -876,7 +876,12 @@ def run_chat(
             console.print("[dim]Goodbye![/]")
             break
 
-        prompt = f"User: {user_input}\nRobbie:"
+        # Clean enclosing quotes so quoted inputs like '"How do I reverse a list?"' don't perturb prefix tokens
+        cleaned_input = user_input.strip("\"' ")
+        if not cleaned_input:
+            cleaned_input = user_input
+
+        prompt = f"User: {cleaned_input}\nRobbie:"
         prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
         input_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=device)
 

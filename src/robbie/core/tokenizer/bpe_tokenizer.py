@@ -86,12 +86,18 @@ class BPETokenizer(BaseTokenizer):
         self._word_cache.clear()
 
         # 1. Discover all base characters across the training corpus
-        base_chars: Set[str] = set()
+        # Seed all standard printable ASCII characters (ord 32 to 126) + newline, tab, carriage return
+        # so symbols like '_', '{', '}', '[', ']', '|', '~', '@' are always part of the vocabulary.
+        base_chars: Set[str] = {chr(c) for c in range(32, 127)} | {"\n", "\t", "\r"}
         for text in texts:
             base_chars.update(text)
 
-        # Register base characters
+        special_set = set(self.special_tokens.all_tokens)
+
+        # Register base characters (excluding special tokens to preserve IDs 0-3)
         for char in sorted(base_chars):
+            if char in special_set:
+                continue
             if char not in self.token_to_id:
                 new_id = len(self.token_to_id)
                 self.token_to_id[char] = new_id
@@ -116,6 +122,21 @@ class BPETokenizer(BaseTokenizer):
                 break
 
             new_token = best_pair[0] + best_pair[1]
+
+            # Never overwrite a special token or an existing token in vocabulary
+            if new_token in special_set or new_token in self.token_to_id:
+                # Merge the word freqs so we can continue merging without looping forever on this pair
+                p0, p1 = best_pair
+                new_word_freqs: Dict[Tuple[str, ...], int] = {}
+                for word_tuple, freq in word_freqs.items():
+                    if p0 in word_tuple and p1 in word_tuple:
+                        merged_tuple = self._merge_word_tuple(word_tuple, best_pair)
+                        new_word_freqs[merged_tuple] = freq
+                    else:
+                        new_word_freqs[word_tuple] = freq
+                word_freqs = new_word_freqs
+                continue
+
             self.merges.append(best_pair)
 
             # Add new merged token to vocabulary
@@ -194,6 +215,10 @@ class BPETokenizer(BaseTokenizer):
         special_set = set(self.special_tokens.all_tokens)
 
         for token_id in token_ids:
+            if token_id == self.unk_token_id:
+                if not skip_special_tokens:
+                    tokens.append(self.special_tokens.UNK)
+                continue
             token = self.id_to_token.get(token_id, self.special_tokens.UNK)
             if skip_special_tokens and token in special_set:
                 continue

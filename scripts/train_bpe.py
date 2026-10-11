@@ -37,6 +37,8 @@ def train_stage1_bpe(
         full_text = f.read()
 
     text_to_train = full_text[:sample_chars] if len(full_text) > sample_chars else full_text
+    # Remove literal <unk> tags originating from WikiText so they don't form corrupted merges
+    text_to_train = text_to_train.replace("<unk>", " ")
     console.print(f"[dim]Training corpus size: {len(text_to_train):,} characters ({len(text_to_train.split()):,} words)[/]")
 
     tokenizer = BPETokenizer(target_vocab_size=vocab_size)

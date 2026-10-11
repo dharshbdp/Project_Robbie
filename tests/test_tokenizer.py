@@ -82,7 +82,7 @@ class TestBPETokenizer:
     """Test suite for BPETokenizer."""
 
     def test_bpe_training_and_merges(self):
-        tokenizer = BPETokenizer(target_vocab_size=30)
+        tokenizer = BPETokenizer(target_vocab_size=130)
         corpus = [
             "low low low low low",
             "lower lower",
@@ -136,6 +136,42 @@ class TestBPETokenizer:
             sample = "testing bpe persistence"
             assert loaded.encode(sample) == tokenizer.encode(sample)
             assert loaded.decode(loaded.encode(sample)) == sample
+
+
+    def test_bpe_ascii_coverage_and_underscore(self):
+        tokenizer = BPETokenizer(target_vocab_size=150)
+        # Train on text that does NOT contain underscores or brackets
+        corpus = ["Robbie learns language and conversational attention."]
+        tokenizer.train(corpus)
+
+        # All standard printable ASCII characters must exist in vocabulary
+        for char_code in range(32, 127):
+            char = chr(char_code)
+            assert char in tokenizer.token_to_id, f"Missing ASCII character: {repr(char)}"
+
+        # Code with underscores, brackets, and colons must roundtrip cleanly
+        code_snippet = "def reverse_list(my_list: list) -> list:\n    return my_list[::-1]"
+        encoded = tokenizer.encode(code_snippet)
+        decoded = tokenizer.decode(encoded)
+        assert decoded == code_snippet
+        assert "my_list" in decoded
+        assert "reverse_list" in decoded
+
+    def test_bpe_special_token_collision_protection(self):
+        tokenizer = BPETokenizer(target_vocab_size=150)
+        # Corpus containing literal '<unk>' tag like WikiText-2
+        corpus = ["This text has <unk> tags and repeats <unk> often."]
+        tokenizer.train(corpus)
+
+        # Special tokens must keep their initial IDs
+        assert tokenizer.pad_token_id == 0
+        assert tokenizer.unk_token_id == 1
+        assert tokenizer.bos_token_id == 2
+        assert tokenizer.eos_token_id == 3
+        assert tokenizer.id_to_token[1] == "<unk>"
+
+        # Ensure bijection: no two tokens share the same ID
+        assert len(tokenizer.token_to_id) == len(tokenizer.id_to_token)
 
 
 class TestDatasetAndPreprocessing:
