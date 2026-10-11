@@ -60,19 +60,21 @@ class TestCharTokenizer:
         encoded = tokenizer.encode("abz")
         assert encoded[-1] == tokenizer.unk_token_id
 
-    def test_save_and_load(self, tmp_path):
-        tokenizer = CharTokenizer()
-        sample = "Persist this vocabulary!"
-        tokenizer.train([sample])
+    def test_save_and_load(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            tokenizer = CharTokenizer()
+            sample = "Persist this vocabulary!"
+            tokenizer.train([sample])
 
-        save_path = tmp_path / "char_vocab.json"
-        tokenizer.save(save_path)
-        assert save_path.exists()
+            save_path = tmp_path / "char_vocab.json"
+            tokenizer.save(save_path)
+            assert save_path.exists()
 
-        loaded = CharTokenizer.load(save_path)
-        assert loaded.vocab_size == tokenizer.vocab_size
-        assert loaded.encode(sample) == tokenizer.encode(sample)
-        assert loaded.decode(loaded.encode(sample)) == sample
+            loaded = CharTokenizer.load(save_path)
+            assert loaded.vocab_size == tokenizer.vocab_size
+            assert loaded.encode(sample) == tokenizer.encode(sample)
+            assert loaded.decode(loaded.encode(sample)) == sample
 
 
 class TestBPETokenizer:
@@ -115,22 +117,24 @@ class TestBPETokenizer:
         decoded = tokenizer.decode(encoded, skip_special_tokens=True)
         assert decoded == "hello"
 
-    def test_bpe_save_and_load(self, tmp_path):
-        tokenizer = BPETokenizer(target_vocab_size=50)
-        corpus = ["testing bpe persistence for robbie"]
-        tokenizer.train(corpus)
+    def test_bpe_save_and_load(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            tokenizer = BPETokenizer(target_vocab_size=50)
+            corpus = ["testing bpe persistence for robbie"]
+            tokenizer.train(corpus)
 
-        save_path = tmp_path / "bpe_vocab.json"
-        tokenizer.save(save_path)
-        assert save_path.exists()
+            save_path = tmp_path / "bpe_vocab.json"
+            tokenizer.save(save_path)
+            assert save_path.exists()
 
-        loaded = BPETokenizer.load(save_path)
-        assert loaded.vocab_size == tokenizer.vocab_size
-        assert loaded.merges == tokenizer.merges
+            loaded = BPETokenizer.load(save_path)
+            assert loaded.vocab_size == tokenizer.vocab_size
+            assert loaded.merges == tokenizer.merges
 
-        sample = "testing bpe persistence"
-        assert loaded.encode(sample) == tokenizer.encode(sample)
-        assert loaded.decode(loaded.encode(sample)) == sample
+            sample = "testing bpe persistence"
+            assert loaded.encode(sample) == tokenizer.encode(sample)
+            assert loaded.decode(loaded.encode(sample)) == sample
 
 
 class TestDatasetAndPreprocessing:

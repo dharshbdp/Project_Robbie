@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+import tempfile
 from pathlib import Path
 
 from robbie.core.models.tiny_llm import TinyLLM, TinyLLMConfig
@@ -66,56 +67,56 @@ class TestTinyLLM:
 class TestTrainingAndCheckpointing:
     """Test suite for training loop and checkpoint saving/loading."""
 
-    def test_training_loss_decreases(self, tmp_path):
-        # Create a tiny repeating token pattern
-        tokens = [1, 2, 3, 4] * 50
-        dataset = TextDataset(tokens, seq_len=8)
+    def test_training_loss_decreases(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            tokens = [1, 2, 3, 4] * 50
+            dataset = TextDataset(tokens, seq_len=8)
 
-        config = TinyLLMConfig(vocab_size=10, block_size=16, n_embd=32, n_hidden=64)
-        model = TinyLLM(config)
+            config = TinyLLMConfig(vocab_size=10, block_size=16, n_embd=32, n_hidden=64)
+            model = TinyLLM(config)
 
-        train_cfg = TrainingConfig(
-            epochs=3,
-            batch_size=8,
-            learning_rate=1e-2,
-            checkpoint_dir=str(tmp_path),
-            device="cpu",
-        )
+            train_cfg = TrainingConfig(
+                epochs=3,
+                batch_size=8,
+                learning_rate=1e-2,
+                checkpoint_dir=str(tmp_path),
+                device="cpu",
+            )
 
-        trainer = Trainer(model, train_dataset=dataset, val_dataset=dataset, config=train_cfg)
-        history = trainer.fit()
+            trainer = Trainer(model, train_dataset=dataset, val_dataset=dataset, config=train_cfg)
+            history = trainer.fit()
 
-        assert len(history["train_loss"]) == 3
-        # Model should learn the simple repeating pattern and decrease loss
-        assert history["train_loss"][-1] < history["train_loss"][0]
+            assert len(history["train_loss"]) == 3
+            assert history["train_loss"][-1] < history["train_loss"][0]
 
-    def test_checkpoint_save_and_load(self, tmp_path):
-        config = TinyLLMConfig(vocab_size=20, block_size=16, n_embd=32, n_hidden=64)
-        model1 = TinyLLM(config)
+    def test_checkpoint_save_and_load(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            config = TinyLLMConfig(vocab_size=20, block_size=16, n_embd=32, n_hidden=64)
+            model1 = TinyLLM(config)
 
-        checkpoint_file = tmp_path / "test_model.pt"
-        tokens = [1, 2, 3] * 30
-        dataset = TextDataset(tokens, seq_len=4)
+            checkpoint_file = tmp_path / "test_model.pt"
+            tokens = [1, 2, 3] * 30
+            dataset = TextDataset(tokens, seq_len=4)
 
-        trainer = Trainer(
-            model1,
-            train_dataset=dataset,
-            val_dataset=dataset,
-            config=TrainingConfig(epochs=1, batch_size=4, checkpoint_dir=str(tmp_path), device="cpu"),
-        )
-        trainer.save_checkpoint(checkpoint_file, epoch=1, val_loss=1.23)
-        assert checkpoint_file.exists()
+            trainer = Trainer(
+                model1,
+                train_dataset=dataset,
+                val_dataset=dataset,
+                config=TrainingConfig(epochs=1, batch_size=4, checkpoint_dir=str(tmp_path), device="cpu"),
+            )
+            trainer.save_checkpoint(checkpoint_file, epoch=1, val_loss=1.23)
+            assert checkpoint_file.exists()
 
-        # Load into fresh model instance
-        model2 = TinyLLM(config)
-        Trainer.load_checkpoint(checkpoint_file, model2)
+            model2 = TinyLLM(config)
+            Trainer.load_checkpoint(checkpoint_file, model2)
 
-        # Confirm weights match and produce identical outputs in eval mode
-        model1.eval()
-        model2.eval()
-        test_input = torch.tensor([[1, 2, 3]])
-        with torch.no_grad():
-            out1, _ = model1(test_input)
-            out2, _ = model2(test_input)
+            model1.eval()
+            model2.eval()
+            test_input = torch.tensor([[1, 2, 3]])
+            with torch.no_grad():
+                out1, _ = model1(test_input)
+                out2, _ = model2(test_input)
 
-        assert torch.allclose(out1, out2)
+            assert torch.allclose(out1, out2)

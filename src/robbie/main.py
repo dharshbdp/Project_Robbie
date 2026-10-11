@@ -2,8 +2,11 @@
 
 import sys
 import argparse
+import json
 from pathlib import Path
 import torch
+from rich.console import Console
+from rich.table import Table
 
 from robbie import __version__
 from robbie.config import RobbieConfig, DATA_DIR, CHECKPOINT_DIR
@@ -11,7 +14,18 @@ from robbie.utils.logger import logger
 from robbie.utils.device import get_hardware_info, get_best_device
 from robbie.core.tokenizer import CharTokenizer, BPETokenizer, prepare_datasets, load_text_file
 from robbie.core.models.tiny_llm import TinyLLM, TinyLLMConfig
+from robbie.core.models.inspector import (
+    print_architecture_inspection,
+    inspect_dataset_alignment,
+    benchmark_generation,
+)
 from robbie.core.training.trainer import Trainer, TrainingConfig
+
+BENCHMARK_PROMPTS = [
+    "ROBBIE: ",
+    "To be or not to be",
+    "The king shall ",
+]
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Project Robbie CLI")
@@ -32,6 +46,16 @@ def parse_args():
         type=int,
         default=5,
         help="Number of epochs for training (default: 5)",
+    )
+    parser.add_argument(
+        "--inspect-baseline",
+        action="store_true",
+        help="Run comprehensive inspection of model architecture, tokenizer, loss, and benchmark samples",
+    )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Run standardized benchmark prompts on current checkpoint",
     )
     parser.add_argument(
         "--generate",
@@ -101,26 +125,22 @@ def run_train_tiny(epochs: int = 5):
     dataset_file = DATA_DIR / "raw" / "tiny_shakespeare.txt"
     if not dataset_file.exists():
         logger.info(f"Dataset not found at {dataset_file}. Running downloader...")
-        import subprocess
         from scripts.download_data import download_dataset
         download_dataset()
 
     text = load_text_file(dataset_file)
     logger.info(f"Loaded dataset: {len(text):,} characters")
 
-    # Train character tokenizer on dataset
     tokenizer = CharTokenizer()
     tokenizer.train([text])
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
     tokenizer.save(CHECKPOINT_DIR / "tiny_vocab.json")
     logger.info(f"Tokenizer trained with vocab size: {tokenizer.vocab_size}")
 
-    # Prepare datasets
     block_size = 64
     train_ds, val_ds = prepare_datasets(text, tokenizer, seq_len=block_size, train_ratio=0.9)
     logger.info(f"Dataset split: {len(train_ds):,} training sequences, {len(val_ds):,} validation sequences")
 
-    # Configure TinyLLM
     model_config = TinyLLMConfig(
         vocab_size=tokenizer.vocab_size,
         block_size=block_size,
@@ -130,7 +150,6 @@ def run_train_tiny(epochs: int = 5):
     )
     model = TinyLLM(model_config)
 
-    # Train
     train_config = TrainingConfig(
         epochs=epochs,
         batch_size=64,
@@ -145,6 +164,87 @@ def run_train_tiny(epochs: int = 5):
     print("      TRAINING COMPLETE! BEST MODEL SAVED TO:")
     print(f"      {CHECKPOINT_DIR / 'best_model.pt'}")
     print("=" * 50 + "\n")
+
+def run_inspect_baseline():
+    """Execute all 4 baseline verification checks."""
+    console = Console()
+    console.print("\n" + "=" * 65)
+    console.print("   ROBBIE v0.2 BASELINE VERIFICATION & QUALITY AUDIT")
+    console.print("=" * 65 + "\n")
+
+    vocab_file = CHECKPOINT_DIR / "tiny_vocab.json"
+    checkpoint_file = CHECKPOINT_DIR / "best_model.pt"
+    dataset_file = DATA_DIR / "raw" / "tiny_shakespeare.txt"
+    history_file = CHECKPOINT_DIR / "training_history.json"
+
+    if not vocab_file.exists():
+        console.print("[red]Vocabulary file not found. Train first with: python -m robbie.main --train-tiny[/]")
+        return
+
+    tokenizer = CharTokenizer.load(vocab_file)
+    model_config = TinyLLMConfig(
+        vocab_size=tokenizer.vocab_size,
+        block_size=64,
+        n_embd=128,
+        n_hidden=256,
+    )
+    model = TinyLLM(model_config)
+
+    # 1. Architecture Inspection
+    console.print("[bold]1. MODEL ARCHITECTURE & PARAMETER AUDIT[/]")
+    print_architecture_inspection(model)
+
+    # 2. Tokenizer & Dataset Alignment
+    if dataset_file.exists():
+        console.print("[bold]2. TOKENIZER & DATASET ALIGNMENT VERIFICATION[/]")
+        sample_text = load_text_file(dataset_file)
+        inspect_dataset_alignment(sample_text, tokenizer, seq_len=12)
+
+    # 3. Loss Tracking & Overfitting Analysis
+    console.print("[bold]3. LOSS TRACKING & CONVERGENCE AUDIT[/]")
+    if history_file.exists():
+        with open(history_file, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        
+        loss_table = Table(title="Training vs Validation Loss History")
+        loss_table.add_column("Epoch", justify="right", style="cyan")
+        loss_table.add_column("Train Loss", justify="right", style="green")
+        loss_table.add_column("Val Loss", justify="right", style="yellow")
+        loss_table.add_column("Gap (Val - Train)", justify="right", style="magenta")
+
+        train_losses = history.get("train_loss", [])
+        val_losses = history.get("val_loss", [])
+
+        for i in range(len(train_losses)):
+            t_l = train_losses[i]
+            v_l = val_losses[i]
+            gap = v_l - t_l
+            loss_table.add_row(str(i + 1), f"{t_l:.4f}", f"{v_l:.4f}", f"{gap:+.4f}")
+
+        console.print(loss_table)
+        final_gap = val_losses[-1] - train_losses[-1]
+        if final_gap < 0.1:
+            console.print("[green]✓ Healthy Generalization:[/] Validation loss closely tracks training loss without overfitting divergence.\n")
+        else:
+            console.print("[yellow]⚠ Note:[/] Validation loss is higher than training loss by >0.1.\n")
+    else:
+        console.print("[yellow]No training_history.json found yet. (Will be recorded on next training run)[/]\n")
+
+    # 4. Standardized Benchmark Generation
+    console.print("[bold]4. STANDARDIZED BENCHMARK GENERATION[/]")
+    if checkpoint_file.exists():
+        Trainer.load_checkpoint(checkpoint_file, model)
+        benchmark_generation(
+            model=model,
+            tokenizer=tokenizer,
+            prompts=BENCHMARK_PROMPTS,
+            max_tokens=60,
+            temperature=0.8,
+            seed=42,
+            device=get_best_device(),
+        )
+    else:
+        console.print("[yellow]No checkpoint found to generate benchmarks from.[/]")
 
 def run_generate(prompt: str, max_tokens: int = 100, temperature: float = 0.8):
     """Generate text from trained TinyLLM checkpoint."""
@@ -164,7 +264,6 @@ def run_generate(prompt: str, max_tokens: int = 100, temperature: float = 0.8):
     model.to(device)
     model.eval()
 
-    # Encode prompt
     prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
     if not prompt_ids:
         prompt_ids = [tokenizer.bos_token_id]
@@ -201,6 +300,29 @@ def main():
 
     if args.train_tiny:
         run_train_tiny(epochs=args.epochs)
+
+    if args.inspect_baseline:
+        run_inspect_baseline()
+
+    if args.benchmark:
+        vocab_file = CHECKPOINT_DIR / "tiny_vocab.json"
+        checkpoint_file = CHECKPOINT_DIR / "best_model.pt"
+        if vocab_file.exists() and checkpoint_file.exists():
+            tokenizer = CharTokenizer.load(vocab_file)
+            model_config = TinyLLMConfig(vocab_size=tokenizer.vocab_size, block_size=64, n_embd=128, n_hidden=256)
+            model = TinyLLM(model_config)
+            Trainer.load_checkpoint(checkpoint_file, model)
+            benchmark_generation(
+                model=model,
+                tokenizer=tokenizer,
+                prompts=BENCHMARK_PROMPTS,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
+                seed=42,
+                device=get_best_device(),
+            )
+        else:
+            print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-tiny")
 
     if args.generate is not None:
         run_generate(args.generate, max_tokens=args.max_tokens, temperature=args.temperature)

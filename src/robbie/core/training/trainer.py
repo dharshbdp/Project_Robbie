@@ -129,6 +129,12 @@ class Trainer:
         final_path = self.checkpoint_dir / "latest_model.pt"
         self.save_checkpoint(final_path, epoch=self.config.epochs, val_loss=val_loss)
 
+        # Save training loss history to JSON
+        import json
+        history_file = self.checkpoint_dir / "training_history.json"
+        with open(history_file, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
+
         return history
 
     def save_checkpoint(

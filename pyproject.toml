@@ -32,7 +32,6 @@ packages = ["src/robbie"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 python_files = ["test_*.py"]
-addopts = "--basetemp=.pytest_temp"
 
 [tool.ruff]
 line-length = 100
