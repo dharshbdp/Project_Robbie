@@ -20,9 +20,11 @@ class TextDataset(Dataset):
         self,
         token_ids: List[int],
         seq_len: int = 64,
+        stride: Optional[int] = None,
         device: str = "cpu",
     ):
         self.seq_len = seq_len
+        self.stride = stride if stride is not None else 1
         self.device = device
         self.data = torch.tensor(token_ids, dtype=torch.long)
 
@@ -32,11 +34,14 @@ class TextDataset(Dataset):
             )
 
     def __len__(self) -> int:
-        return len(self.data) - self.seq_len
+        if self.stride == 1:
+            return len(self.data) - self.seq_len
+        return (len(self.data) - self.seq_len - 1) // self.stride + 1
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = self.data[idx : idx + self.seq_len]
-        y = self.data[idx + 1 : idx + self.seq_len + 1]
+        start = idx * self.stride
+        x = self.data[start : start + self.seq_len]
+        y = self.data[start + 1 : start + self.seq_len + 1]
         return x.to(self.device), y.to(self.device)
 
 
@@ -64,6 +69,7 @@ def prepare_datasets(
     text: str,
     tokenizer: BaseTokenizer,
     seq_len: int = 64,
+    stride: Optional[int] = None,
     train_ratio: float = 0.9,
     device: str = "cpu",
 ) -> Tuple[TextDataset, TextDataset]:
@@ -72,8 +78,8 @@ def prepare_datasets(
     train_tokens = tokenizer.encode(train_text)
     val_tokens = tokenizer.encode(val_text)
 
-    train_ds = TextDataset(train_tokens, seq_len=seq_len, device=device)
-    val_ds = TextDataset(val_tokens, seq_len=seq_len, device=device)
+    train_ds = TextDataset(train_tokens, seq_len=seq_len, stride=stride, device=device)
+    val_ds = TextDataset(val_tokens, seq_len=seq_len, stride=stride, device=device)
     return train_ds, val_ds
 
 
@@ -82,12 +88,18 @@ def prepare_datasets_from_splits(
     val_text: str,
     tokenizer: BaseTokenizer,
     seq_len: int = 64,
+    stride: Optional[int] = None,
     device: str = "cpu",
 ) -> Tuple[TextDataset, TextDataset]:
-    """Tokenize pre-split text strings and return train and validation PyTorch datasets."""
+    """Tokenize pre-split text strings and return train and validation PyTorch datasets.
+
+    Defaults to non-overlapping chunks (stride = seq_len) to cover all tokens
+    without redundant sequence duplication.
+    """
+    effective_stride = stride if stride is not None else seq_len
     train_tokens = tokenizer.encode(train_text)
     val_tokens = tokenizer.encode(val_text)
-    train_ds = TextDataset(train_tokens, seq_len=seq_len, device=device)
-    val_ds = TextDataset(val_tokens, seq_len=seq_len, device=device)
+    train_ds = TextDataset(train_tokens, seq_len=seq_len, stride=effective_stride, device=device)
+    val_ds = TextDataset(val_tokens, seq_len=seq_len, stride=effective_stride, device=device)
     return train_ds, val_ds
 

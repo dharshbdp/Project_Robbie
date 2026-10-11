@@ -157,6 +157,18 @@ class TestDatasetAndPreprocessing:
         assert x.tolist() == [0, 1, 2, 3, 4]
         assert y.tolist() == [1, 2, 3, 4, 5]
 
+    def test_text_dataset_with_stride(self):
+        tokens = list(range(20))
+        dataset = TextDataset(tokens, seq_len=5, stride=5)
+        assert len(dataset) == 3
+        x0, y0 = dataset[0]
+        x1, y1 = dataset[1]
+        x2, y2 = dataset[2]
+        assert x0.tolist() == [0, 1, 2, 3, 4]
+        assert x1.tolist() == [5, 6, 7, 8, 9]
+        assert x2.tolist() == [10, 11, 12, 13, 14]
+        assert y2.tolist() == [11, 12, 13, 14, 15]
+
     def test_prepare_datasets(self):
         text = "The quick brown fox jumps over the lazy dog. Robbie is a personal AI system."
         tokenizer = CharTokenizer()

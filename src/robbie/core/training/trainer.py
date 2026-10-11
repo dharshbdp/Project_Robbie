@@ -79,13 +79,21 @@ class Trainer:
         self.checkpoint_dir = Path(self.config.checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    def train_epoch(self, dataloader: DataLoader, scheduler: Optional[Any] = None) -> float:
-        """Run one training epoch with optional AMP and LR scheduling."""
+    def train_epoch(
+        self,
+        dataloader: DataLoader,
+        scheduler: Optional[Any] = None,
+        epoch: int = 1,
+        total_epochs: int = 1,
+    ) -> float:
+        """Run one training epoch with optional AMP, LR scheduling, and step logging."""
         self.model.train()
         total_loss = 0.0
         num_batches = 0
+        total_batches = len(dataloader)
+        log_interval = max(20, total_batches // 10)  # Log every ~10% or at least every 20 steps
 
-        for x, y in dataloader:
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
             x, y = x.to(self.device), y.to(self.device)
 
             self.optimizer.zero_grad()
@@ -108,6 +116,15 @@ class Trainer:
 
                 total_loss += loss.item()
                 num_batches += 1
+
+                if batch_idx % log_interval == 0 or batch_idx == total_batches:
+                    avg_loss = total_loss / num_batches
+                    current_lr = self.optimizer.param_groups[0]["lr"]
+                    pct = (100.0 * batch_idx) / max(1, total_batches)
+                    logger.info(
+                        f"Epoch [{epoch}/{total_epochs}] | Step [{batch_idx}/{total_batches}] ({pct:.0f}%) | "
+                        f"Loss: {loss.item():.4f} (avg: {avg_loss:.4f}) | LR: {current_lr:.6f}"
+                    )
 
         return total_loss / max(1, num_batches)
 
@@ -176,7 +193,12 @@ class Trainer:
             logger.info(f"Early Stopping enabled with patience: {self.config.early_stopping_patience} epochs")
 
         for epoch in range(1, self.config.epochs + 1):
-            train_loss = self.train_epoch(train_loader, scheduler=scheduler)
+            train_loss = self.train_epoch(
+                train_loader,
+                scheduler=scheduler,
+                epoch=epoch,
+                total_epochs=self.config.epochs,
+            )
             val_loss = self.evaluate(val_loader)
             val_ppl = math.exp(min(val_loss, 20.0))
             current_lr = self.optimizer.param_groups[0]["lr"]
