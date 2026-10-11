@@ -14,6 +14,7 @@ from robbie.utils.logger import logger
 from robbie.utils.device import get_hardware_info, get_best_device
 from robbie.core.tokenizer import CharTokenizer, BPETokenizer, prepare_datasets, load_text_file
 from robbie.core.models.tiny_llm import TinyLLM, TinyLLMConfig
+from robbie.core.models.transformer import RobbieTransformer, TransformerConfig
 from robbie.core.models.inspector import (
     print_architecture_inspection,
     inspect_dataset_alignment,
@@ -42,6 +43,11 @@ def parse_args():
         help="Train the Phase 2 Tiny Language Model on the starter dataset",
     )
     parser.add_argument(
+        "--train-transformer",
+        action="store_true",
+        help="Train the Phase 3 Causal Transformer (GPT) on the starter dataset",
+    )
+    parser.add_argument(
         "--epochs",
         type=int,
         default=5,
@@ -61,7 +67,14 @@ def parse_args():
         "--generate",
         type=str,
         default=None,
-        help="Generate text from the trained TinyLLM given a starting prompt",
+        help="Generate text from the trained model given a starting prompt",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="auto",
+        choices=["auto", "transformer", "tiny"],
+        help="Which model checkpoint to use for generation (default: auto)",
     )
     parser.add_argument(
         "--max-tokens",
@@ -165,6 +178,59 @@ def run_train_tiny(epochs: int = 5):
     print(f"      {CHECKPOINT_DIR / 'best_model.pt'}")
     print("=" * 50 + "\n")
 
+def run_train_transformer(epochs: int = 5):
+    """Train RobbieTransformer (Phase 3 GPT) on starter dataset."""
+    dataset_file = DATA_DIR / "raw" / "tiny_shakespeare.txt"
+    if not dataset_file.exists():
+        logger.info(f"Dataset not found at {dataset_file}. Running downloader...")
+        from scripts.download_data import download_dataset
+        download_dataset()
+
+    text = load_text_file(dataset_file)
+    logger.info(f"Loaded dataset: {len(text):,} characters")
+
+    # Use or train tokenizer
+    vocab_file = CHECKPOINT_DIR / "transformer_vocab.json"
+    tokenizer = CharTokenizer()
+    tokenizer.train([text])
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    tokenizer.save(vocab_file)
+    logger.info(f"Tokenizer ready with vocab size: {tokenizer.vocab_size}")
+
+    block_size = 64
+    train_ds, val_ds = prepare_datasets(text, tokenizer, seq_len=block_size, train_ratio=0.9)
+    logger.info(f"Dataset split: {len(train_ds):,} training sequences, {len(val_ds):,} validation sequences")
+
+    # Configure RobbieTransformer: 4 Transformer Blocks, 4 Attention Heads, 128 Embedding Dim
+    config = TransformerConfig(
+        vocab_size=tokenizer.vocab_size,
+        block_size=block_size,
+        n_layer=4,
+        n_head=4,
+        n_embd=128,
+        dropout=0.1,
+    )
+    model = RobbieTransformer(config)
+
+    train_config = TrainingConfig(
+        epochs=epochs,
+        batch_size=64,
+        learning_rate=5e-4,
+        checkpoint_dir=str(CHECKPOINT_DIR),
+        device="auto",
+    )
+    trainer = Trainer(model, train_ds, val_ds, train_config)
+    history = trainer.fit()
+
+    # Save as transformer specific checkpoint
+    best_transformer_path = CHECKPOINT_DIR / "best_transformer.pt"
+    trainer.save_checkpoint(best_transformer_path, epoch=epochs, val_loss=history["val_loss"][-1])
+
+    print("\n" + "=" * 55)
+    print("   TRANSFORMER TRAINING COMPLETE! BEST MODEL SAVED TO:")
+    print(f"   {best_transformer_path}")
+    print("=" * 55 + "\n")
+
 def run_inspect_baseline():
     """Execute all 4 baseline verification checks."""
     console = Console()
@@ -205,7 +271,7 @@ def run_inspect_baseline():
     if history_file.exists():
         with open(history_file, "r", encoding="utf-8") as f:
             history = json.load(f)
-        
+
         loss_table = Table(title="Training vs Validation Loss History")
         loss_table.add_column("Epoch", justify="right", style="cyan")
         loss_table.add_column("Train Loss", justify="right", style="green")
@@ -228,7 +294,7 @@ def run_inspect_baseline():
         else:
             console.print("[yellow]⚠ Note:[/] Validation loss is higher than training loss by >0.1.\n")
     else:
-        console.print("[yellow]No training_history.json found yet. (Will be recorded on next training run)[/]\n")
+        console.print("[yellow]No training_history.json found yet.[/]\n")
 
     # 4. Standardized Benchmark Generation
     console.print("[bold]4. STANDARDIZED BENCHMARK GENERATION[/]")
@@ -246,21 +312,40 @@ def run_inspect_baseline():
     else:
         console.print("[yellow]No checkpoint found to generate benchmarks from.[/]")
 
-def run_generate(prompt: str, max_tokens: int = 100, temperature: float = 0.8):
-    """Generate text from trained TinyLLM checkpoint."""
-    checkpoint_file = CHECKPOINT_DIR / "best_model.pt"
-    vocab_file = CHECKPOINT_DIR / "tiny_vocab.json"
+def run_generate(prompt: str, model_type: str = "auto", max_tokens: int = 100, temperature: float = 0.8):
+    """Generate text from trained checkpoint."""
+    transformer_ckpt = CHECKPOINT_DIR / "best_transformer.pt"
+    tiny_ckpt = CHECKPOINT_DIR / "best_model.pt"
 
-    if not checkpoint_file.exists() or not vocab_file.exists():
-        print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-tiny")
-        return
-
-    tokenizer = CharTokenizer.load(vocab_file)
-    model_config = TinyLLMConfig(vocab_size=tokenizer.vocab_size, block_size=64, n_embd=128, n_hidden=256)
-    model = TinyLLM(model_config)
+    # Auto select model type
+    if model_type == "auto":
+        if transformer_ckpt.exists():
+            model_type = "transformer"
+        elif tiny_ckpt.exists():
+            model_type = "tiny"
+        else:
+            print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-transformer")
+            return
 
     device = get_best_device()
-    Trainer.load_checkpoint(checkpoint_file, model)
+
+    if model_type == "transformer":
+        vocab_file = CHECKPOINT_DIR / "transformer_vocab.json"
+        if not vocab_file.exists():
+            vocab_file = CHECKPOINT_DIR / "tiny_vocab.json"
+        tokenizer = CharTokenizer.load(vocab_file)
+        config = TransformerConfig(vocab_size=tokenizer.vocab_size, block_size=64, n_layer=4, n_head=4, n_embd=128)
+        model = RobbieTransformer(config)
+        Trainer.load_checkpoint(transformer_ckpt, model)
+        logger.info("Loaded RobbieTransformer (Phase 3 GPT) checkpoint")
+    else:
+        vocab_file = CHECKPOINT_DIR / "tiny_vocab.json"
+        tokenizer = CharTokenizer.load(vocab_file)
+        config = TinyLLMConfig(vocab_size=tokenizer.vocab_size, block_size=64, n_embd=128, n_hidden=256)
+        model = TinyLLM(config)
+        Trainer.load_checkpoint(tiny_ckpt, model)
+        logger.info("Loaded TinyLLM (Phase 2 Baseline) checkpoint")
+
     model.to(device)
     model.eval()
 
@@ -301,6 +386,9 @@ def main():
     if args.train_tiny:
         run_train_tiny(epochs=args.epochs)
 
+    if args.train_transformer:
+        run_train_transformer(epochs=args.epochs)
+
     if args.inspect_baseline:
         run_inspect_baseline()
 
@@ -325,7 +413,7 @@ def main():
             print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-tiny")
 
     if args.generate is not None:
-        run_generate(args.generate, max_tokens=args.max_tokens, temperature=args.temperature)
+        run_generate(args.generate, model_type=args.model, max_tokens=args.max_tokens, temperature=args.temperature)
 
 if __name__ == "__main__":
     main()

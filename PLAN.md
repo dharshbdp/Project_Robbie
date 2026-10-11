@@ -53,12 +53,12 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 3 — Transformer Implementation
 **Version 0.3 — Transformer**
-- [ ] Embeddings and positional information
-- [ ] Causal self-attention
-- [ ] Multi-head attention
-- [ ] Feed-forward layers
-- [ ] Residual connections and normalization
-- [ ] Inference pipeline
+- [x] Embeddings and positional information
+- [x] Causal self-attention
+- [x] Multi-head attention
+- [x] Feed-forward layers
+- [x] Residual connections and normalization
+- [x] Inference pipeline
 
 ### Phase 4 — Base Model & Training Pipeline
 **Version 0.5 — Base Model**
