@@ -775,6 +775,9 @@ def run_generate(
     )
     generated_ids = generated_tensor[0].tolist()
     generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    for delim in ["<|endoftext|>", "<isendoftextis>"]:
+        if delim in generated_text:
+            generated_text = generated_text.split(delim)[0].strip()
 
     print("-" * 50)
     print(generated_text)
@@ -891,6 +894,8 @@ def run_chat(
             response_text = response_text.split("\nUser:")[0].strip()
         if "<|endoftext|>" in response_text:
             response_text = response_text.split("<|endoftext|>")[0].strip()
+        if "<isendoftextis>" in response_text:
+            response_text = response_text.split("<isendoftextis>")[0].strip()
 
         console.print(f"[bold cyan]Robbie:[/] {response_text}\n")
 
