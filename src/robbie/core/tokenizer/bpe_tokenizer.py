@@ -24,6 +24,7 @@ class BPETokenizer(BaseTokenizer):
         super().__init__(special_tokens=special_tokens)
         self.target_vocab_size = target_vocab_size
         self.merges: List[Tuple[str, str]] = []
+        self._word_cache: Dict[str, List[str]] = {}
         self._init_special_tokens()
 
     def _init_special_tokens(self) -> None:
@@ -78,10 +79,11 @@ class BPETokenizer(BaseTokenizer):
                 i += 1
         return tuple(merged)
 
-    def train(self, texts: List[str]) -> None:
+    def train(self, texts: List[str], min_freq: int = 2) -> None:
         """Train BPE merges and build vocabulary up to target_vocab_size."""
         self._init_special_tokens()
         self.merges = []
+        self._word_cache.clear()
 
         # 1. Discover all base characters across the training corpus
         base_chars: Set[str] = set()
@@ -97,6 +99,8 @@ class BPETokenizer(BaseTokenizer):
 
         # 2. Extract word frequencies
         word_freqs = self._get_word_stats(texts)
+        if min_freq > 1:
+            word_freqs = {w: f for w, f in word_freqs.items() if f >= min_freq}
 
         # 3. Iteratively merge most frequent pairs until target vocab size
         num_merges_to_perform = max(0, self.target_vocab_size - len(self.token_to_id))
@@ -119,23 +123,31 @@ class BPETokenizer(BaseTokenizer):
             self.token_to_id[new_token] = new_id
             self.id_to_token[new_id] = new_token
 
-            # Update word frequencies with merged pair
+            # Update word frequencies: only re-merge words containing both pair elements
+            p0, p1 = best_pair
             new_word_freqs: Dict[Tuple[str, ...], int] = {}
             for word_tuple, freq in word_freqs.items():
-                merged_tuple = self._merge_word_tuple(word_tuple, best_pair)
-                new_word_freqs[merged_tuple] = freq
+                if p0 in word_tuple and p1 in word_tuple:
+                    merged_tuple = self._merge_word_tuple(word_tuple, best_pair)
+                    new_word_freqs[merged_tuple] = freq
+                else:
+                    new_word_freqs[word_tuple] = freq
             word_freqs = new_word_freqs
 
     def _tokenize_word(self, word: str) -> List[str]:
         """Apply learned BPE merges to an individual word."""
         if not word:
             return []
+        if word in self._word_cache:
+            return self._word_cache[word]
 
         # Start with individual characters
         tokens = list(word)
 
         # Apply each learned merge in priority order
         for p0, p1 in self.merges:
+            if p0 not in word or p1 not in word:
+                continue
             i = 0
             merged: List[str] = []
             while i < len(tokens):
@@ -147,6 +159,7 @@ class BPETokenizer(BaseTokenizer):
                     i += 1
             tokens = merged
 
+        self._word_cache[word] = tokens
         return tokens
 
     def encode(self, text: str, add_special_tokens: bool = False) -> List[int]:
