@@ -127,3 +127,64 @@ class TestRobbieTransformer:
                 out2, _ = model2(test_input)
 
             assert torch.allclose(out1, out2)
+
+    def test_early_stopping_and_best_checkpoint(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            tokens = [1, 2, 3, 4] * 30
+            train_ds = TextDataset(tokens, seq_len=8)
+            val_ds = TextDataset(tokens, seq_len=8)
+
+            config = TransformerConfig(vocab_size=10, block_size=16, n_layer=1, n_head=1, n_embd=16)
+            model = RobbieTransformer(config)
+
+            train_cfg = TrainingConfig(
+                epochs=10,
+                batch_size=4,
+                checkpoint_dir=str(tmp_path),
+                best_model_name="best_custom.pt",
+                early_stopping_patience=2,
+                device="cpu",
+            )
+            trainer = Trainer(model, train_ds, val_ds, train_cfg)
+            history = trainer.fit()
+
+            assert (tmp_path / "best_custom.pt").exists()
+            assert (tmp_path / "latest_model.pt").exists()
+            assert "best_epoch" in history
+            assert "best_val_loss" in history
+
+    def test_checkpoint_metadata_and_reproducible_generation(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            config = TransformerConfig(vocab_size=20, block_size=16, n_layer=2, n_head=2, n_embd=32)
+            model_orig = RobbieTransformer(config)
+            ckpt_path = tmp_path / "test_repro.pt"
+
+            trainer = Trainer(
+                model_orig,
+                train_dataset=None,
+                val_dataset=None,
+                config=TrainingConfig(checkpoint_dir=str(tmp_path), device="cpu"),
+            )
+            trainer.save_checkpoint(ckpt_path, epoch=7, val_loss=1.4713)
+
+            # Load into fresh model
+            model_loaded = RobbieTransformer(config)
+            metadata = Trainer.load_checkpoint(ckpt_path, model_loaded)
+
+            assert metadata["epoch"] == 7
+            assert abs(metadata["val_loss"] - 1.4713) < 1e-4
+
+            # Verify identical outputs and reproducible generation
+            model_orig.eval()
+            model_loaded.eval()
+            inp = torch.tensor([[5, 6, 7]])
+
+            torch.manual_seed(99)
+            gen1 = model_orig.generate(inp, max_new_tokens=6, temperature=0.8, top_k=5)
+
+            torch.manual_seed(99)
+            gen2 = model_loaded.generate(inp, max_new_tokens=6, temperature=0.8, top_k=5)
+
+            assert torch.equal(gen1, gen2)

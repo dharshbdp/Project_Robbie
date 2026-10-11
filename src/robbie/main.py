@@ -4,6 +4,7 @@ import sys
 import argparse
 import json
 from pathlib import Path
+from typing import Optional, List
 import torch
 from rich.console import Console
 from rich.table import Table
@@ -54,6 +55,24 @@ def parse_args():
         help="Number of epochs for training (default: 5)",
     )
     parser.add_argument(
+        "--patience",
+        type=int,
+        default=None,
+        help="Early stopping patience (number of non-improving epochs before stopping)",
+    )
+    parser.add_argument(
+        "--dropout",
+        type=float,
+        default=0.1,
+        help="Dropout probability for regularization (default: 0.1)",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.01,
+        help="AdamW weight decay for regularization (default: 0.01)",
+    )
+    parser.add_argument(
         "--inspect-baseline",
         action="store_true",
         help="Run comprehensive inspection of model architecture, tokenizer, loss, and benchmark samples",
@@ -62,6 +81,23 @@ def parse_args():
         "--benchmark",
         action="store_true",
         help="Run standardized benchmark prompts on current checkpoint",
+    )
+    parser.add_argument(
+        "--compare-checkpoints",
+        action="store_true",
+        help="Run comparative benchmark between Epoch 3 (best val loss) and Epoch 5",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        default=None,
+        help="Path to specific checkpoint file to load (default: best_transformer.pt)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for deterministic generation",
     )
     parser.add_argument(
         "--generate",
@@ -178,7 +214,13 @@ def run_train_tiny(epochs: int = 5):
     print(f"      {CHECKPOINT_DIR / 'best_model.pt'}")
     print("=" * 50 + "\n")
 
-def run_train_transformer(epochs: int = 5):
+def run_train_transformer(
+    epochs: int = 5,
+    patience: Optional[int] = None,
+    dropout: float = 0.1,
+    weight_decay: float = 0.01,
+    learning_rate: float = 5e-4,
+):
     """Train RobbieTransformer (Phase 3 GPT) on starter dataset."""
     dataset_file = DATA_DIR / "raw" / "tiny_shakespeare.txt"
     if not dataset_file.exists():
@@ -208,27 +250,30 @@ def run_train_transformer(epochs: int = 5):
         n_layer=4,
         n_head=4,
         n_embd=128,
-        dropout=0.1,
+        dropout=dropout,
     )
     model = RobbieTransformer(config)
 
     train_config = TrainingConfig(
         epochs=epochs,
         batch_size=64,
-        learning_rate=5e-4,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
         checkpoint_dir=str(CHECKPOINT_DIR),
+        best_model_name="best_transformer.pt",
+        early_stopping_patience=patience,
         device="auto",
     )
     trainer = Trainer(model, train_ds, val_ds, train_config)
     history = trainer.fit()
 
-    # Save as transformer specific checkpoint
     best_transformer_path = CHECKPOINT_DIR / "best_transformer.pt"
-    trainer.save_checkpoint(best_transformer_path, epoch=epochs, val_loss=history["val_loss"][-1])
-
+    best_loss = history.get("best_val_loss", "N/A")
+    loss_display = f"{best_loss:.4f}" if isinstance(best_loss, float) else str(best_loss)
     print("\n" + "=" * 55)
     print("   TRANSFORMER TRAINING COMPLETE! BEST MODEL SAVED TO:")
     print(f"   {best_transformer_path}")
+    print(f"   Best Epoch: {history.get('best_epoch', 'N/A')} | Lowest Val Loss: {loss_display}")
     print("=" * 55 + "\n")
 
 def run_inspect_baseline():
@@ -312,20 +357,49 @@ def run_inspect_baseline():
     else:
         console.print("[yellow]No checkpoint found to generate benchmarks from.[/]")
 
-def run_generate(prompt: str, model_type: str = "auto", max_tokens: int = 100, temperature: float = 0.8):
+def run_generate(
+    prompt: str,
+    model_type: str = "auto",
+    checkpoint: Optional[str] = None,
+    max_tokens: int = 100,
+    temperature: float = 0.8,
+    seed: Optional[int] = None,
+):
     """Generate text from trained checkpoint."""
-    transformer_ckpt = CHECKPOINT_DIR / "best_transformer.pt"
-    tiny_ckpt = CHECKPOINT_DIR / "best_model.pt"
+    if seed is not None:
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
-    # Auto select model type
-    if model_type == "auto":
-        if transformer_ckpt.exists():
-            model_type = "transformer"
-        elif tiny_ckpt.exists():
-            model_type = "tiny"
-        else:
-            print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-transformer")
+    if checkpoint is not None:
+        selected_ckpt = Path(checkpoint)
+        if not selected_ckpt.exists():
+            print(f"[Error] Specified checkpoint not found: {selected_ckpt}")
             return
+        # Infer architecture from state_dict keys
+        raw_data = torch.load(selected_ckpt, map_location="cpu", weights_only=False)
+        state_keys = list(raw_data.get("model_state_dict", {}).keys())
+        is_transformer = any("blocks" in k for k in state_keys)
+        model_type = "transformer" if is_transformer else "tiny"
+    else:
+        transformer_ckpt = CHECKPOINT_DIR / "best_transformer.pt"
+        tiny_ckpt = CHECKPOINT_DIR / "best_model.pt"
+
+        # Auto select model type
+        if model_type == "auto":
+            if transformer_ckpt.exists():
+                selected_ckpt = transformer_ckpt
+                model_type = "transformer"
+            elif tiny_ckpt.exists():
+                selected_ckpt = tiny_ckpt
+                model_type = "tiny"
+            else:
+                print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-transformer")
+                return
+        elif model_type == "transformer":
+            selected_ckpt = transformer_ckpt
+        else:
+            selected_ckpt = tiny_ckpt
 
     device = get_best_device()
 
@@ -336,15 +410,15 @@ def run_generate(prompt: str, model_type: str = "auto", max_tokens: int = 100, t
         tokenizer = CharTokenizer.load(vocab_file)
         config = TransformerConfig(vocab_size=tokenizer.vocab_size, block_size=64, n_layer=4, n_head=4, n_embd=128)
         model = RobbieTransformer(config)
-        Trainer.load_checkpoint(transformer_ckpt, model)
-        logger.info("Loaded RobbieTransformer (Phase 3 GPT) checkpoint")
+        Trainer.load_checkpoint(selected_ckpt, model)
+        logger.info(f"Loaded RobbieTransformer checkpoint: {selected_ckpt.name}")
     else:
         vocab_file = CHECKPOINT_DIR / "tiny_vocab.json"
         tokenizer = CharTokenizer.load(vocab_file)
         config = TinyLLMConfig(vocab_size=tokenizer.vocab_size, block_size=64, n_embd=128, n_hidden=256)
         model = TinyLLM(config)
-        Trainer.load_checkpoint(tiny_ckpt, model)
-        logger.info("Loaded TinyLLM (Phase 2 Baseline) checkpoint")
+        Trainer.load_checkpoint(selected_ckpt, model)
+        logger.info(f"Loaded TinyLLM checkpoint: {selected_ckpt.name}")
 
     model.to(device)
     model.eval()
@@ -354,9 +428,11 @@ def run_generate(prompt: str, model_type: str = "auto", max_tokens: int = 100, t
         prompt_ids = [tokenizer.bos_token_id]
     input_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=device)
 
-    print(f"\n[Prompt]: \"{prompt}\"")
+    seed_str = str(seed) if seed is not None else "random"
+    print(f"\n[Checkpoint]: {selected_ckpt.name} | [Seed]: {seed_str}")
+    print(f"[Prompt]: \"{prompt}\"")
     print(f"[Generating with temperature {temperature}...]\n")
-    generated_tensor = model.generate(input_tensor, max_new_tokens=max_tokens, temperature=temperature)
+    generated_tensor = model.generate(input_tensor, max_new_tokens=max_tokens, temperature=temperature, top_k=20)
     generated_ids = generated_tensor[0].tolist()
     generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
 
@@ -387,7 +463,29 @@ def main():
         run_train_tiny(epochs=args.epochs)
 
     if args.train_transformer:
-        run_train_transformer(epochs=args.epochs)
+        run_train_transformer(
+            epochs=args.epochs,
+            patience=args.patience,
+            dropout=args.dropout,
+            weight_decay=args.weight_decay,
+        )
+
+    if args.compare_checkpoints:
+        from scripts.compare_checkpoints import compare_checkpoints
+        ckpt_a = Path("checkpoints/transformer_epoch3_best.pt")
+        ckpt_b = Path("checkpoints/transformer_epoch5.pt")
+        if ckpt_a.exists() and ckpt_b.exists():
+            compare_checkpoints(
+                ckpt_a=ckpt_a,
+                ckpt_b=ckpt_b,
+                label_a="Epoch 3 (Best Val Loss: 1.5024)",
+                label_b="Epoch 5 (Final: 1.5056)",
+                temperature=args.temperature,
+                max_tokens=args.max_tokens,
+                seed=args.seed if args.seed is not None else 42,
+            )
+        else:
+            print("[Error] One or both checkpoints (epoch 3 / epoch 5) not found.")
 
     if args.inspect_baseline:
         run_inspect_baseline()
@@ -413,7 +511,14 @@ def main():
             print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-tiny")
 
     if args.generate is not None:
-        run_generate(args.generate, model_type=args.model, max_tokens=args.max_tokens, temperature=args.temperature)
+        run_generate(
+            args.generate,
+            model_type=args.model,
+            checkpoint=args.checkpoint,
+            max_tokens=args.max_tokens,
+            temperature=args.temperature,
+            seed=args.seed,
+        )
 
 if __name__ == "__main__":
     main()

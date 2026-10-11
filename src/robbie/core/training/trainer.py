@@ -19,6 +19,9 @@ class TrainingConfig:
     weight_decay: float = 0.01
     grad_clip: float = 1.0
     checkpoint_dir: str = "checkpoints"
+    best_model_name: str = "best_model.pt"
+    early_stopping_patience: Optional[int] = None
+    early_stopping_min_delta: float = 1e-4
     device: str = "auto"
 
 
@@ -99,11 +102,20 @@ class Trainer:
             shuffle=False,
         )
 
-        history = {"train_loss": [], "val_loss": []}
+        history: Dict[str, Any] = {
+            "train_loss": [],
+            "val_loss": [],
+            "best_epoch": 1,
+            "best_val_loss": float("inf"),
+        }
         best_val_loss = float("inf")
+        best_epoch = 1
+        patience_counter = 0
 
         logger.info(f"Starting training on device: {self.device.upper()}")
         logger.info(f"Epochs: {self.config.epochs} | Batch Size: {self.config.batch_size} | Learning Rate: {self.config.learning_rate}")
+        if self.config.early_stopping_patience is not None:
+            logger.info(f"Early Stopping enabled with patience: {self.config.early_stopping_patience} epochs")
 
         for epoch in range(1, self.config.epochs + 1):
             train_loss = self.train_epoch(train_loader)
@@ -116,18 +128,33 @@ class Trainer:
                 f"Epoch [{epoch}/{self.config.epochs}] | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}"
             )
 
-            # Save best checkpoint
-            if val_loss < best_val_loss:
+            # Check if this is a new best checkpoint
+            if val_loss < (best_val_loss - self.config.early_stopping_min_delta):
                 best_val_loss = val_loss
+                best_epoch = epoch
+                patience_counter = 0
                 self.save_checkpoint(
-                    self.checkpoint_dir / "best_model.pt",
+                    self.checkpoint_dir / self.config.best_model_name,
                     epoch=epoch,
                     val_loss=val_loss,
                 )
+            else:
+                patience_counter += 1
+                if (
+                    self.config.early_stopping_patience is not None
+                    and patience_counter >= self.config.early_stopping_patience
+                ):
+                    logger.info(
+                        f"Early stopping triggered at epoch {epoch}! Best val loss was {best_val_loss:.4f} at epoch {best_epoch}."
+                    )
+                    break
+
+        history["best_epoch"] = best_epoch
+        history["best_val_loss"] = best_val_loss
 
         # Save final checkpoint
         final_path = self.checkpoint_dir / "latest_model.pt"
-        self.save_checkpoint(final_path, epoch=self.config.epochs, val_loss=val_loss)
+        self.save_checkpoint(final_path, epoch=epoch, val_loss=val_loss)
 
         # Save training loss history to JSON
         import json

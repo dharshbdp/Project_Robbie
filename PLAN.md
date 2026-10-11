@@ -59,6 +59,7 @@ This document serves as the master roadmap and execution plan for Project Robbie
 - [x] Feed-forward layers
 - [x] Residual connections and normalization
 - [x] Inference pipeline
+- [x] Baseline established: RobbieTransformer (808k params), Val Loss: 1.4713, Perplexity: ~4.35 (Epoch 7)
 
 ### Phase 4 — Base Model & Training Pipeline
 **Version 0.5 — Base Model**
