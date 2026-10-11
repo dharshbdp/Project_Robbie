@@ -11,6 +11,7 @@ from robbie.core.tokenizer import (
     TextDataset,
     split_text_data,
     prepare_datasets,
+    prepare_datasets_from_splits,
 )
 
 
@@ -167,3 +168,19 @@ class TestDatasetAndPreprocessing:
         x, y = train_ds[0]
         assert x.shape == (10,)
         assert y.shape == (10,)
+
+    def test_prepare_datasets_from_splits(self):
+        train_text = "This is the training set for Robbie base pretraining."
+        val_text = "This is validation."
+        tokenizer = CharTokenizer()
+        tokenizer.train([train_text, val_text])
+
+        train_ds, val_ds = prepare_datasets_from_splits(
+            train_text, val_text, tokenizer, seq_len=8
+        )
+        assert len(train_ds) > 0
+        assert len(val_ds) > 0
+        x, y = train_ds[0]
+        assert x.shape == (8,)
+        assert y.shape == (8,)
+

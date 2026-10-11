@@ -75,3 +75,19 @@ def prepare_datasets(
     train_ds = TextDataset(train_tokens, seq_len=seq_len, device=device)
     val_ds = TextDataset(val_tokens, seq_len=seq_len, device=device)
     return train_ds, val_ds
+
+
+def prepare_datasets_from_splits(
+    train_text: str,
+    val_text: str,
+    tokenizer: BaseTokenizer,
+    seq_len: int = 64,
+    device: str = "cpu",
+) -> Tuple[TextDataset, TextDataset]:
+    """Tokenize pre-split text strings and return train and validation PyTorch datasets."""
+    train_tokens = tokenizer.encode(train_text)
+    val_tokens = tokenizer.encode(val_text)
+    train_ds = TextDataset(train_tokens, seq_len=seq_len, device=device)
+    val_ds = TextDataset(val_tokens, seq_len=seq_len, device=device)
+    return train_ds, val_ds
+

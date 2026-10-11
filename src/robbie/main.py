@@ -13,7 +13,13 @@ from robbie import __version__
 from robbie.config import RobbieConfig, DATA_DIR, CHECKPOINT_DIR
 from robbie.utils.logger import logger
 from robbie.utils.device import get_hardware_info, get_best_device
-from robbie.core.tokenizer import CharTokenizer, BPETokenizer, prepare_datasets, load_text_file
+from robbie.core.tokenizer import (
+    CharTokenizer,
+    BPETokenizer,
+    prepare_datasets,
+    prepare_datasets_from_splits,
+    load_text_file,
+)
 from robbie.core.models.tiny_llm import TinyLLM, TinyLLMConfig
 from robbie.core.models.transformer import RobbieTransformer, TransformerConfig
 from robbie.core.models.inspector import (
@@ -49,10 +55,37 @@ def parse_args():
         help="Train the Phase 3 Causal Transformer (GPT) on the starter dataset",
     )
     parser.add_argument(
+        "--train-stage1",
+        action="store_true",
+        help="Train the Phase 4 Stage 1 Base Transformer with BPE subwords on WikiText",
+    )
+    parser.add_argument(
+        "--block-size",
+        type=int,
+        default=128,
+        help="Context window length in tokens (default: 128)",
+    )
+    parser.add_argument(
+        "--no-amp",
+        action="store_true",
+        help="Disable Automatic Mixed Precision (AMP) on CUDA",
+    )
+    parser.add_argument(
+        "--no-cosine",
+        action="store_true",
+        help="Disable Cosine Decay learning rate scheduler",
+    )
+    parser.add_argument(
         "--epochs",
         type=int,
         default=5,
         help="Number of epochs for training (default: 5)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help="Batch size for training (default: 64)",
     )
     parser.add_argument(
         "--patience",
@@ -276,6 +309,94 @@ def run_train_transformer(
     print(f"   Best Epoch: {history.get('best_epoch', 'N/A')} | Lowest Val Loss: {loss_display}")
     print("=" * 55 + "\n")
 
+def run_train_stage1(
+    epochs: int = 5,
+    batch_size: int = 64,
+    block_size: int = 128,
+    learning_rate: float = 5e-4,
+    weight_decay: float = 0.03,
+    dropout: float = 0.15,
+    patience: Optional[int] = 2,
+    use_amp: bool = True,
+    use_cosine: bool = True,
+):
+    """Train Robbie Stage 1 Base Transformer with BPE subwords on WikiText."""
+    console = Console()
+    console.print("\n" + "=" * 65)
+    console.print("   PROJECT ROBBIE — STAGE 1 BASE PRETRAINING (v0.5)")
+    console.print(f"   Context Window: {block_size} tokens | Batch Size: {batch_size}")
+    console.print("=" * 65 + "\n")
+
+    train_file = DATA_DIR / "processed" / "stage1" / "train.txt"
+    val_file = DATA_DIR / "processed" / "stage1" / "val.txt"
+    bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
+
+    # 1. Ensure dataset exists
+    if not train_file.exists() or not val_file.exists():
+        logger.info("Stage 1 dataset not found. Running dataset pipeline...")
+        from robbie.core.data import DatasetPipeline
+        pipeline = DatasetPipeline(data_root=DATA_DIR)
+        pipeline.prepare_stage1_pretrain()
+
+    # 2. Ensure BPE tokenizer exists
+    if not bpe_vocab_file.exists():
+        logger.info("Stage 1 BPE vocabulary not found. Training BPE tokenizer...")
+        from scripts.train_bpe import train_stage1_bpe
+        tokenizer = train_stage1_bpe(vocab_size=1024, output_path=bpe_vocab_file)
+    else:
+        tokenizer = BPETokenizer.load(bpe_vocab_file)
+        logger.info(f"Loaded BPE tokenizer with {tokenizer.vocab_size} tokens from {bpe_vocab_file.name}")
+
+    # 3. Load text and prepare datasets
+    logger.info("Loading preprocessed Stage 1 text files...")
+    train_text = load_text_file(train_file)
+    val_text = load_text_file(val_file)
+
+    logger.info(f"Tokenizing Stage 1 text (train: {len(train_text):,} chars, val: {len(val_text):,} chars)...")
+    train_ds, val_ds = prepare_datasets_from_splits(
+        train_text, val_text, tokenizer=tokenizer, seq_len=block_size
+    )
+    logger.info(f"Dataset split: {len(train_ds):,} training sequences, {len(val_ds):,} validation sequences")
+
+    # 4. Configure Stage 1 Base Transformer
+    config = TransformerConfig(
+        vocab_size=tokenizer.vocab_size,
+        block_size=block_size,
+        n_layer=4,
+        n_head=4,
+        n_embd=128,
+        dropout=dropout,
+    )
+    model = RobbieTransformer(config)
+
+    train_config = TrainingConfig(
+        epochs=epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay,
+        grad_clip=1.0,
+        use_amp=use_amp,
+        use_cosine_lr=use_cosine,
+        checkpoint_dir=str(CHECKPOINT_DIR),
+        best_model_name="stage1_base_transformer.pt",
+        early_stopping_patience=patience,
+        device="auto",
+    )
+    trainer = Trainer(model, train_ds, val_ds, train_config)
+    history = trainer.fit()
+
+    best_path = CHECKPOINT_DIR / "stage1_base_transformer.pt"
+    best_loss = history.get("best_val_loss", "N/A")
+    loss_disp = f"{best_loss:.4f}" if isinstance(best_loss, float) else str(best_loss)
+    best_ppl = history.get("best_val_perplexity", "N/A")
+    ppl_disp = f"{best_ppl:.2f}" if isinstance(best_ppl, float) else str(best_ppl)
+
+    console.print("\n" + "=" * 65)
+    console.print("   STAGE 1 BASE PRETRAINING COMPLETE!")
+    console.print(f"   Best Model Saved To: [bold green]{best_path}[/]")
+    console.print(f"   Best Epoch: {history.get('best_epoch', 'N/A')} | Lowest Val Loss: {loss_disp} | Perplexity: {ppl_disp}")
+    console.print("=" * 65 + "\n")
+
 def run_inspect_baseline():
     """Execute all 4 baseline verification checks."""
     console = Console()
@@ -382,33 +503,56 @@ def run_generate(
         is_transformer = any("blocks" in k for k in state_keys)
         model_type = "transformer" if is_transformer else "tiny"
     else:
+        stage1_ckpt = CHECKPOINT_DIR / "stage1_base_transformer.pt"
         transformer_ckpt = CHECKPOINT_DIR / "best_transformer.pt"
         tiny_ckpt = CHECKPOINT_DIR / "best_model.pt"
 
         # Auto select model type
         if model_type == "auto":
-            if transformer_ckpt.exists():
+            if stage1_ckpt.exists():
+                selected_ckpt = stage1_ckpt
+                model_type = "transformer"
+            elif transformer_ckpt.exists():
                 selected_ckpt = transformer_ckpt
                 model_type = "transformer"
             elif tiny_ckpt.exists():
                 selected_ckpt = tiny_ckpt
                 model_type = "tiny"
             else:
-                print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-transformer")
+                print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-stage1")
                 return
         elif model_type == "transformer":
-            selected_ckpt = transformer_ckpt
+            selected_ckpt = stage1_ckpt if stage1_ckpt.exists() else transformer_ckpt
         else:
             selected_ckpt = tiny_ckpt
+
+    raw_data = torch.load(selected_ckpt, map_location="cpu", weights_only=False)
+    saved_config = raw_data.get("config", None)
+    bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
+    is_bpe = bpe_vocab_file.exists() and (
+        "stage1" in selected_ckpt.name
+        or (saved_config is not None and getattr(saved_config, "vocab_size", 0) > 500)
+    )
 
     device = get_best_device()
 
     if model_type == "transformer":
-        vocab_file = CHECKPOINT_DIR / "transformer_vocab.json"
-        if not vocab_file.exists():
-            vocab_file = CHECKPOINT_DIR / "tiny_vocab.json"
-        tokenizer = CharTokenizer.load(vocab_file)
-        config = TransformerConfig(vocab_size=tokenizer.vocab_size, block_size=64, n_layer=4, n_head=4, n_embd=128)
+        if is_bpe:
+            tokenizer = BPETokenizer.load(bpe_vocab_file)
+            block_size = getattr(saved_config, "block_size", 128) if saved_config else 128
+            config = saved_config if isinstance(saved_config, TransformerConfig) else TransformerConfig(
+                vocab_size=tokenizer.vocab_size,
+                block_size=block_size,
+                n_layer=4,
+                n_head=4,
+                n_embd=128,
+            )
+        else:
+            vocab_file = CHECKPOINT_DIR / "transformer_vocab.json"
+            if not vocab_file.exists():
+                vocab_file = CHECKPOINT_DIR / "tiny_vocab.json"
+            tokenizer = CharTokenizer.load(vocab_file)
+            config = TransformerConfig(vocab_size=tokenizer.vocab_size, block_size=64, n_layer=4, n_head=4, n_embd=128)
         model = RobbieTransformer(config)
         Trainer.load_checkpoint(selected_ckpt, model)
         logger.info(f"Loaded RobbieTransformer checkpoint: {selected_ckpt.name}")
@@ -468,6 +612,18 @@ def main():
             patience=args.patience,
             dropout=args.dropout,
             weight_decay=args.weight_decay,
+        )
+
+    if args.train_stage1:
+        run_train_stage1(
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            block_size=args.block_size,
+            dropout=args.dropout,
+            weight_decay=args.weight_decay,
+            patience=args.patience,
+            use_amp=not args.no_amp,
+            use_cosine=not args.no_cosine,
         )
 
     if args.compare_checkpoints:

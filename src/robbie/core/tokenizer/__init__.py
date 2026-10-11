@@ -8,6 +8,7 @@ from robbie.core.tokenizer.dataset import (
     load_text_file,
     split_text_data,
     prepare_datasets,
+    prepare_datasets_from_splits,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "load_text_file",
     "split_text_data",
     "prepare_datasets",
+    "prepare_datasets_from_splits",
 ]

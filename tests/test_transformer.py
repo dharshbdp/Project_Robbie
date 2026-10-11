@@ -188,3 +188,53 @@ class TestRobbieTransformer:
             gen2 = model_loaded.generate(inp, max_new_tokens=6, temperature=0.8, top_k=5)
 
             assert torch.equal(gen1, gen2)
+
+    def test_cosine_schedule_with_warmup(self):
+        from robbie.core.training.trainer import get_cosine_schedule_with_warmup
+        model = torch.nn.Linear(10, 10)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        scheduler = get_cosine_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=10,
+            num_training_steps=100,
+            min_lr_ratio=0.1,
+        )
+
+        lrs = []
+        for _ in range(100):
+            lrs.append(optimizer.param_groups[0]["lr"])
+            optimizer.step()
+            scheduler.step()
+
+        # Check warmup starts low and peaks around step 10
+        assert lrs[0] < lrs[9]
+        assert abs(lrs[10] - 1e-3) < 1e-5
+        # Check decay drops towards min_lr (1e-4)
+        assert lrs[-1] < lrs[10]
+        assert abs(lrs[-1] - 1e-4) < 1e-4
+
+    def test_trainer_with_cosine_scheduler_and_perplexity(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            tokens = [1, 2, 3, 4] * 20
+            dataset = TextDataset(tokens, seq_len=4)
+
+            config = TransformerConfig(vocab_size=10, block_size=8, n_layer=1, n_head=1, n_embd=16)
+            model = RobbieTransformer(config)
+
+            train_cfg = TrainingConfig(
+                epochs=2,
+                batch_size=4,
+                learning_rate=1e-3,
+                use_cosine_lr=True,
+                warmup_ratio=0.1,
+                checkpoint_dir=str(tmp_path),
+                device="cpu",
+            )
+            trainer = Trainer(model, dataset, dataset, train_cfg)
+            history = trainer.fit()
+
+            assert "val_perplexity" in history
+            assert len(history["val_perplexity"]) == 2
+            assert history["val_perplexity"][0] > 1.0
+            assert "learning_rates" in history
