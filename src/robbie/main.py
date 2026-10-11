@@ -170,8 +170,14 @@ def parse_args():
     parser.add_argument(
         "--temperature",
         type=float,
-        default=0.8,
-        help="Sampling temperature (default: 0.8)",
+        default=0.7,
+        help="Sampling temperature (default: 0.7)",
+    )
+    parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        default=1.25,
+        help="Penalty for previously generated tokens to prevent repetition loops (default: 1.25)",
     )
     return parser.parse_args()
 
@@ -598,7 +604,8 @@ def run_generate(
     model_type: str = "auto",
     checkpoint: Optional[str] = None,
     max_tokens: int = 100,
-    temperature: float = 0.8,
+    temperature: float = 0.7,
+    repetition_penalty: float = 1.25,
     seed: Optional[int] = None,
 ):
     """Generate text from trained checkpoint."""
@@ -705,8 +712,9 @@ def run_generate(
         input_tensor,
         max_new_tokens=max_tokens,
         temperature=temperature,
-        top_k=20,
+        top_k=25,
         stop_token_id=stop_id,
+        repetition_penalty=repetition_penalty,
     )
     generated_ids = generated_tensor[0].tolist()
     generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
@@ -719,6 +727,7 @@ def run_chat(
     checkpoint: Optional[str] = None,
     max_tokens: int = 100,
     temperature: float = 0.7,
+    repetition_penalty: float = 1.25,
     seed: Optional[int] = None,
 ):
     """Launch interactive terminal chat session with Robbie."""
@@ -795,6 +804,7 @@ def run_chat(
             temperature=temperature,
             top_k=25,
             stop_token_id=tokenizer.eos_token_id,
+            repetition_penalty=repetition_penalty,
         )
         gen_ids = generated_tensor[0].tolist()[len(prompt_ids):]
         response_text = tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
@@ -866,6 +876,7 @@ def main():
             checkpoint=args.checkpoint,
             max_tokens=args.max_tokens,
             temperature=args.temperature,
+            repetition_penalty=args.repetition_penalty,
             seed=args.seed,
         )
 
@@ -916,6 +927,7 @@ def main():
             checkpoint=args.checkpoint,
             max_tokens=args.max_tokens,
             temperature=args.temperature,
+            repetition_penalty=args.repetition_penalty,
             seed=args.seed,
         )
 

@@ -128,6 +128,7 @@ class RobbieTransformer(nn.Module):
         temperature: float = 0.8,
         top_k: Optional[int] = 40,
         stop_token_id: Optional[int] = None,
+        repetition_penalty: float = 1.0,
     ) -> torch.Tensor:
         """Autoregressively sample tokens conditioned on input prompt."""
         self.eval()
@@ -139,6 +140,14 @@ class RobbieTransformer(nn.Module):
             # Forward pass
             logits, _ = self(idx_cond)
             logits = logits[:, -1, :]  # Logits for next token (B, vocab_size)
+
+            # Apply repetition penalty if enabled
+            if repetition_penalty != 1.0 and idx.size(1) > 0:
+                for token_id in set(idx[0].tolist()):
+                    if logits[0, token_id] > 0:
+                        logits[0, token_id] /= repetition_penalty
+                    else:
+                        logits[0, token_id] *= repetition_penalty
 
             if temperature <= 0.0:
                 idx_next = torch.argmax(logits, dim=-1, keepdim=True)
