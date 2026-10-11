@@ -1,6 +1,6 @@
 [project]
 name = "project-robbie"
-version = "0.1.0"
+version = "0.2.0"
 description = "Project Robbie: A personal AI character built from the ground up"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,6 +32,7 @@ packages = ["src/robbie"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 python_files = ["test_*.py"]
+addopts = "--basetemp=.pytest_temp"
 
 [tool.ruff]
 line-length = 100

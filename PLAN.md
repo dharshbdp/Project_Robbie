@@ -45,11 +45,11 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 2 — Tiny Language Model
 **Version 0.2 — Tiny LLM**
-- [ ] Next-token prediction
-- [ ] Training and validation loops
-- [ ] Loss calculation
-- [ ] Checkpoint saving and loading
-- [ ] Text generation
+- [x] Next-token prediction
+- [x] Training and validation loops
+- [x] Loss calculation
+- [x] Checkpoint saving and loading
+- [x] Text generation
 
 ### Phase 3 — Transformer Implementation
 **Version 0.3 — Transformer**
