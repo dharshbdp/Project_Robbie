@@ -63,7 +63,7 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 4 — Base Model & Training Pipeline
 **Version 0.5 — Base Model**
-- [ ] Dataset preparation and cleaning
+- [x] Dataset preparation and cleaning (Two-stage architecture: Stage 1 Pretraining & Stage 2 Dialogue)
 - [ ] Training configuration
 - [ ] GPU acceleration
 - [ ] Checkpoint management
