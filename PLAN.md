@@ -64,11 +64,11 @@ This document serves as the master roadmap and execution plan for Project Robbie
 ### Phase 4 — Base Model & Training Pipeline
 **Version 0.5 — Base Model**
 - [x] Dataset preparation and cleaning (Two-stage architecture: Stage 1 Pretraining & Stage 2 Dialogue)
-- [ ] Training configuration
-- [ ] GPU acceleration
-- [ ] Checkpoint management
-- [ ] Validation and model evaluation
-- [ ] Improved text generation
+- [x] Training configuration (Cosine LR with warmup, AMP FP16, AdamW, GradScaler)
+- [x] GPU acceleration (Full CUDA optimization with mixed precision, ~18s / epoch)
+- [x] Checkpoint management (`stage1_base_transformer.pt`, `stage2_conversational_transformer.pt`, metadata & perplexity tracking)
+- [x] Validation and model evaluation (Stage 1 Val Loss: 2.3880, Val Perplexity: 10.89)
+- [x] Improved text generation (BPE subwords, top-k sampling, `<|endoftext|>` stop token handling, interactive chat)
 
 ### Phase 5 — Conversational Model
 **Version 0.7 — Conversational Robbie**
