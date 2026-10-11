@@ -65,7 +65,7 @@ def main():
 
     if args.stage == 2 or args.all:
         console.print("[bold cyan]=== Preparing Stage 2 (Conversational Fine-Tuning) ===[/]")
-        meta2 = pipeline.prepare_stage2_dialogue()
+        meta2 = pipeline.prepare_stage2_dialogue(force=True)
         print_stage_stats(DATA_DIR / "processed" / "stage2" / "dataset_metadata.json", console)
 
     if args.stats and not args.stage and not args.all:

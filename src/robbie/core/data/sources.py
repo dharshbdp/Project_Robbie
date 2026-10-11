@@ -199,9 +199,13 @@ def fetch_stage2_dialogue_data(raw_dir: Path, force: bool = False) -> Path:
     dest_file = raw_dir / "assistant_dialogues.jsonl"
 
     if not dest_file.exists() or dest_file.stat().st_size == 0 or force:
-        logger.info(f"Writing curated Stage 2 assistant dialogues to {dest_file}")
+        from robbie.core.data.dialogue_dataset import get_expanded_stage2_dialogues
+        expanded_dialogues = get_expanded_stage2_dialogues()
+        logger.info(f"Writing {len(expanded_dialogues)} curated Stage 2 assistant dialogues to {dest_file.name}...")
         with open(dest_file, "w", encoding="utf-8") as f:
-            for item in STAGE2_ASSISTANT_DIALOGUES:
+            for item in expanded_dialogues:
                 f.write(json.dumps(item, ensure_ascii=False) + "\n")
+        logger.info(f"Successfully exported {len(expanded_dialogues)} Stage 2 dialogues!")
 
     return dest_file
+

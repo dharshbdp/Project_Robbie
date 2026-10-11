@@ -459,14 +459,14 @@ def run_train_stage1(
 
 def run_train_stage2(
     model_size: str = "25m",
-    epochs: int = 10,
+    epochs: int = 25,
     batch_size: int = 16,
     block_size: int = 128,
-    stride: int = 32,
-    learning_rate: float = 1.5e-4,
+    stride: int = 16,
+    learning_rate: float = 2e-4,
     weight_decay: float = 0.01,
     dropout: float = 0.1,
-    patience: Optional[int] = 3,
+    patience: Optional[int] = 5,
     use_amp: bool = True,
     use_cosine: bool = True,
 ):
@@ -945,13 +945,13 @@ def main():
     if args.train_stage2:
         run_train_stage2(
             model_size=args.model_size,
-            epochs=args.epochs if args.epochs != 5 else 10,
+            epochs=args.epochs if args.epochs != 5 else 25,
             batch_size=args.batch_size if args.batch_size != 64 else 16,
             block_size=args.block_size,
-            stride=args.stride if args.stride is not None else 32,
+            stride=args.stride if args.stride is not None else 16,
             dropout=args.dropout,
             weight_decay=args.weight_decay,
-            patience=args.patience,
+            patience=args.patience if args.patience is not None else 5,
             use_amp=not args.no_amp,
             use_cosine=not args.no_cosine,
         )
@@ -960,7 +960,7 @@ def main():
         run_chat(
             checkpoint=args.checkpoint,
             max_tokens=args.max_tokens,
-            temperature=args.temperature,
+            temperature=args.temperature if args.temperature != 0.7 else 0.4,
             repetition_penalty=args.repetition_penalty,
             seed=args.seed,
         )
