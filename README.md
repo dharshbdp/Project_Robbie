@@ -1,6 +1,6 @@
 # Project Robbie
 
-> **Status:** Planning  
+> **Status:** Training  
 > **Project Type:** Personal AI / LLM / Agent / Desktop Application  
 > **Primary Goal:** Build a personal AI character from the ground up, including a custom LLM, persistent memory, web research, and awareness of the user's computer.
 
