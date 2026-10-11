@@ -52,6 +52,17 @@ class DatasetPipeline:
         with open(raw_val_file, "r", encoding="utf-8", errors="replace") as f:
             raw_val_text = f.read()
 
+        source_files = [str(raw_train_file.name), str(raw_val_file.name)]
+
+        # Check for additional pretraining corpora (e.g. TinyStories)
+        tinystories_path = stage1_raw / "tinystories.txt"
+        if tinystories_path.exists() and tinystories_path.stat().st_size > 0:
+            logger.info(f"[Stage 1] Ingesting additional narrative corpus: {tinystories_path.name}")
+            with open(tinystories_path, "r", encoding="utf-8", errors="replace") as f:
+                tinystories_text = f.read()
+            raw_train_text = raw_train_text + f"\n\n{DOCUMENT_DELIMITER}\n\n" + tinystories_text
+            source_files.append(tinystories_path.name)
+
         cleaned_train = self.cleaner.clean(raw_train_text)
         cleaned_val = self.cleaner.clean(raw_val_text)
 
@@ -70,8 +81,8 @@ class DatasetPipeline:
         metadata = {
             "stage": 1,
             "name": "Base Model Pretraining",
-            "description": "General English patterns, sentence structure, and encyclopedic knowledge",
-            "source_files": [str(raw_train_file.name), str(raw_val_file.name)],
+            "description": "General English patterns, sentence structure, and encyclopedic knowledge + narrative stories",
+            "source_files": source_files,
             "train": train_stats,
             "val": val_stats,
             "delimiter": DOCUMENT_DELIMITER,

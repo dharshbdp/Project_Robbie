@@ -35,10 +35,44 @@ BENCHMARK_PROMPTS = [
     "The king shall ",
 ]
 
+MODEL_PRESETS = {
+    "prototype": {
+        "n_layer": 4,
+        "n_head": 4,
+        "n_embd": 128,
+        "stage1_ckpt": "stage1_base_transformer.pt",
+        "stage2_ckpt": "stage2_conversational_transformer.pt",
+        "name": "Robbie-Prototype (~808k parameters)",
+    },
+    "11m": {
+        "n_layer": 6,
+        "n_head": 6,
+        "n_embd": 384,
+        "stage1_ckpt": "stage1_11m_base_transformer.pt",
+        "stage2_ckpt": "stage2_11m_conversational_transformer.pt",
+        "name": "Robbie-11M (~11.1 Million parameters)",
+    },
+    "25m": {
+        "n_layer": 8,
+        "n_head": 8,
+        "n_embd": 512,
+        "stage1_ckpt": "stage1_25m_base_transformer.pt",
+        "stage2_ckpt": "stage2_25m_conversational_transformer.pt",
+        "name": "Robbie-25M (~25.8 Million parameters)",
+    },
+}
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Project Robbie CLI")
     parser.add_argument("--version", action="version", version=f"Project Robbie v{__version__}")
     parser.add_argument("--info", action="store_true", help="Print system and hardware report")
+    parser.add_argument(
+        "--model-size",
+        type=str,
+        default="25m",
+        choices=["prototype", "11m", "25m"],
+        help="Model architecture scale: 'prototype' (~808k), '11m' (~11M), or '25m' (~25.8M) (default: 25m)",
+    )
     parser.add_argument(
         "--demo-tokenizer",
         action="store_true",
@@ -332,20 +366,24 @@ def run_train_transformer(
     print("=" * 55 + "\n")
 
 def run_train_stage1(
+    model_size: str = "25m",
     epochs: int = 5,
-    batch_size: int = 64,
+    batch_size: int = 32,
     block_size: int = 128,
     learning_rate: float = 5e-4,
     weight_decay: float = 0.03,
-    dropout: float = 0.15,
+    dropout: float = 0.1,
     patience: Optional[int] = 2,
     use_amp: bool = True,
     use_cosine: bool = True,
 ):
-    """Train Robbie Stage 1 Base Transformer with BPE subwords on WikiText."""
+    """Train Robbie Stage 1 Base Transformer with BPE subwords on WikiText + TinyStories."""
     console = Console()
+    preset = MODEL_PRESETS.get(model_size, MODEL_PRESETS["25m"])
+    save_ckpt_name = preset["stage1_ckpt"]
+
     console.print("\n" + "=" * 65)
-    console.print("   PROJECT ROBBIE — STAGE 1 BASE PRETRAINING (v0.5)")
+    console.print(f"   PROJECT ROBBIE — STAGE 1 BASE PRETRAINING: {preset['name']}")
     console.print(f"   Context Window: {block_size} tokens | Batch Size: {batch_size}")
     console.print("=" * 65 + "\n")
 
@@ -364,7 +402,7 @@ def run_train_stage1(
     if not bpe_vocab_file.exists():
         logger.info("Stage 1 BPE vocabulary not found. Training BPE tokenizer...")
         from scripts.train_bpe import train_stage1_bpe
-        tokenizer = train_stage1_bpe(vocab_size=1024, output_path=bpe_vocab_file)
+        tokenizer = train_stage1_bpe(vocab_size=2048, output_path=bpe_vocab_file)
     else:
         tokenizer = BPETokenizer.load(bpe_vocab_file)
         logger.info(f"Loaded BPE tokenizer with {tokenizer.vocab_size} tokens from {bpe_vocab_file.name}")
@@ -384,9 +422,9 @@ def run_train_stage1(
     config = TransformerConfig(
         vocab_size=tokenizer.vocab_size,
         block_size=block_size,
-        n_layer=4,
-        n_head=4,
-        n_embd=128,
+        n_layer=preset["n_layer"],
+        n_head=preset["n_head"],
+        n_embd=preset["n_embd"],
         dropout=dropout,
     )
     model = RobbieTransformer(config)
@@ -400,26 +438,27 @@ def run_train_stage1(
         use_amp=use_amp,
         use_cosine_lr=use_cosine,
         checkpoint_dir=str(CHECKPOINT_DIR),
-        best_model_name="stage1_base_transformer.pt",
+        best_model_name=save_ckpt_name,
         early_stopping_patience=patience,
         device="auto",
     )
     trainer = Trainer(model, train_ds, val_ds, train_config)
     history = trainer.fit()
 
-    best_path = CHECKPOINT_DIR / "stage1_base_transformer.pt"
+    best_path = CHECKPOINT_DIR / save_ckpt_name
     best_loss = history.get("best_val_loss", "N/A")
     loss_disp = f"{best_loss:.4f}" if isinstance(best_loss, float) else str(best_loss)
     best_ppl = history.get("best_val_perplexity", "N/A")
     ppl_disp = f"{best_ppl:.2f}" if isinstance(best_ppl, float) else str(best_ppl)
 
     console.print("\n" + "=" * 65)
-    console.print("   STAGE 1 BASE PRETRAINING COMPLETE!")
+    console.print(f"   STAGE 1 BASE PRETRAINING COMPLETE ({preset['name']})!")
     console.print(f"   Best Model Saved To: [bold green]{best_path}[/]")
     console.print(f"   Best Epoch: {history.get('best_epoch', 'N/A')} | Lowest Val Loss: {loss_disp} | Perplexity: {ppl_disp}")
     console.print("=" * 65 + "\n")
 
 def run_train_stage2(
+    model_size: str = "25m",
     epochs: int = 10,
     batch_size: int = 16,
     block_size: int = 128,
@@ -433,21 +472,24 @@ def run_train_stage2(
 ):
     """Fine-tune Stage 1 Base Robbie Transformer on Stage 2 Assistant Dialogues."""
     console = Console()
+    preset = MODEL_PRESETS.get(model_size, MODEL_PRESETS["25m"])
+    stage1_base_path = CHECKPOINT_DIR / preset["stage1_ckpt"]
+    save_ckpt_name = preset["stage2_ckpt"]
+
     console.print("\n" + "=" * 65)
-    console.print("   PROJECT ROBBIE — STAGE 2 CONVERSATIONAL FINE-TUNING (v0.5)")
+    console.print(f"   PROJECT ROBBIE — STAGE 2 CONVERSATIONAL FINE-TUNING: {preset['name']}")
     console.print(f"   Context Window: {block_size} tokens | Batch Size: {batch_size} | Stride: {stride}")
     console.print("=" * 65 + "\n")
 
     train_file = DATA_DIR / "processed" / "stage2" / "train.txt"
     val_file = DATA_DIR / "processed" / "stage2" / "val.txt"
     bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
-    stage1_base_path = CHECKPOINT_DIR / "stage1_base_transformer.pt"
 
     # 1. Ensure Stage 1 base model exists
     if not stage1_base_path.exists():
         console.print(
             f"[red]Stage 1 Base checkpoint not found at {stage1_base_path}. "
-            "Please train Stage 1 base model first: python -m robbie.main --train-stage1[/]"
+            f"Please train Stage 1 base model first: python -m robbie.main --train-stage1 --model-size {model_size}[/]"
         )
         return
 
@@ -480,9 +522,9 @@ def run_train_stage2(
     config = TransformerConfig(
         vocab_size=tokenizer.vocab_size,
         block_size=block_size,
-        n_layer=4,
-        n_head=4,
-        n_embd=128,
+        n_layer=preset["n_layer"],
+        n_head=preset["n_head"],
+        n_embd=preset["n_embd"],
         dropout=dropout,
     )
     model = RobbieTransformer(config)
@@ -499,21 +541,21 @@ def run_train_stage2(
         use_amp=use_amp,
         use_cosine_lr=use_cosine,
         checkpoint_dir=str(CHECKPOINT_DIR),
-        best_model_name="stage2_conversational_transformer.pt",
+        best_model_name=save_ckpt_name,
         early_stopping_patience=patience,
         device="auto",
     )
     trainer = Trainer(model, train_ds, val_ds, train_config)
     history = trainer.fit()
 
-    best_path = CHECKPOINT_DIR / "stage2_conversational_transformer.pt"
+    best_path = CHECKPOINT_DIR / save_ckpt_name
     best_loss = history.get("best_val_loss", "N/A")
     loss_disp = f"{best_loss:.4f}" if isinstance(best_loss, float) else str(best_loss)
     best_ppl = history.get("best_val_perplexity", "N/A")
     ppl_disp = f"{best_ppl:.2f}" if isinstance(best_ppl, float) else str(best_ppl)
 
     console.print("\n" + "=" * 65)
-    console.print("   STAGE 2 CONVERSATIONAL FINE-TUNING COMPLETE!")
+    console.print(f"   STAGE 2 CONVERSATIONAL FINE-TUNING COMPLETE ({preset['name']})!")
     console.print(f"   Conversational Model Saved To: [bold green]{best_path}[/]")
     console.print(f"   Best Epoch: {history.get('best_epoch', 'N/A')} | Lowest Val Loss: {loss_disp} | Perplexity: {ppl_disp}")
     console.print("=" * 65 + "\n")
@@ -625,21 +667,30 @@ def run_generate(
         is_transformer = any("blocks" in k for k in state_keys)
         model_type = "transformer" if is_transformer else "tiny"
     else:
+        stage2_25m_ckpt = CHECKPOINT_DIR / "stage2_25m_conversational_transformer.pt"
+        stage1_25m_ckpt = CHECKPOINT_DIR / "stage1_25m_base_transformer.pt"
+        stage2_11m_ckpt = CHECKPOINT_DIR / "stage2_11m_conversational_transformer.pt"
+        stage1_11m_ckpt = CHECKPOINT_DIR / "stage1_11m_base_transformer.pt"
         stage2_ckpt = CHECKPOINT_DIR / "stage2_conversational_transformer.pt"
         stage1_ckpt = CHECKPOINT_DIR / "stage1_base_transformer.pt"
         transformer_ckpt = CHECKPOINT_DIR / "best_transformer.pt"
         tiny_ckpt = CHECKPOINT_DIR / "best_model.pt"
 
+        available_transformers = [
+            stage2_25m_ckpt,
+            stage1_25m_ckpt,
+            stage2_11m_ckpt,
+            stage1_11m_ckpt,
+            stage2_ckpt,
+            stage1_ckpt,
+            transformer_ckpt,
+        ]
+
         # Auto select model type
         if model_type == "auto":
-            if stage2_ckpt.exists():
-                selected_ckpt = stage2_ckpt
-                model_type = "transformer"
-            elif stage1_ckpt.exists():
-                selected_ckpt = stage1_ckpt
-                model_type = "transformer"
-            elif transformer_ckpt.exists():
-                selected_ckpt = transformer_ckpt
+            found_tf = next((c for c in available_transformers if c.exists()), None)
+            if found_tf is not None:
+                selected_ckpt = found_tf
                 model_type = "transformer"
             elif tiny_ckpt.exists():
                 selected_ckpt = tiny_ckpt
@@ -648,12 +699,8 @@ def run_generate(
                 print("[Error] No trained checkpoint found. Train first with: python -m robbie.main --train-stage1")
                 return
         elif model_type == "transformer":
-            if stage2_ckpt.exists():
-                selected_ckpt = stage2_ckpt
-            elif stage1_ckpt.exists():
-                selected_ckpt = stage1_ckpt
-            else:
-                selected_ckpt = transformer_ckpt
+            found_tf = next((c for c in available_transformers if c.exists()), None)
+            selected_ckpt = found_tf if found_tf is not None else transformer_ckpt
         else:
             selected_ckpt = tiny_ckpt
 
@@ -671,13 +718,23 @@ def run_generate(
         if is_bpe:
             tokenizer = BPETokenizer.load(bpe_vocab_file)
             block_size = getattr(saved_config, "block_size", 128) if saved_config else 128
-            config = saved_config if isinstance(saved_config, TransformerConfig) else TransformerConfig(
-                vocab_size=tokenizer.vocab_size,
-                block_size=block_size,
-                n_layer=4,
-                n_head=4,
-                n_embd=128,
-            )
+            if isinstance(saved_config, TransformerConfig):
+                config = saved_config
+            elif isinstance(saved_config, dict):
+                config = TransformerConfig(**saved_config)
+            elif saved_config is not None:
+                config = saved_config
+            else:
+                n_layer = 8 if "25m" in selected_ckpt.name else (6 if "11m" in selected_ckpt.name else 4)
+                n_head = 8 if "25m" in selected_ckpt.name else (6 if "11m" in selected_ckpt.name else 4)
+                n_embd = 512 if "25m" in selected_ckpt.name else (384 if "11m" in selected_ckpt.name else 128)
+                config = TransformerConfig(
+                    vocab_size=tokenizer.vocab_size,
+                    block_size=block_size,
+                    n_layer=n_layer,
+                    n_head=n_head,
+                    n_embd=n_embd,
+                )
         else:
             vocab_file = CHECKPOINT_DIR / "transformer_vocab.json"
             if not vocab_file.exists():
@@ -738,19 +795,30 @@ def run_chat(
     console.print("   Type 'exit' or 'quit' to end the session.")
     console.print("=" * 60 + "\n")
 
+    stage2_25m_ckpt = CHECKPOINT_DIR / "stage2_25m_conversational_transformer.pt"
+    stage1_25m_ckpt = CHECKPOINT_DIR / "stage1_25m_base_transformer.pt"
+    stage2_11m_ckpt = CHECKPOINT_DIR / "stage2_11m_conversational_transformer.pt"
+    stage1_11m_ckpt = CHECKPOINT_DIR / "stage1_11m_base_transformer.pt"
     stage2_ckpt = CHECKPOINT_DIR / "stage2_conversational_transformer.pt"
     stage1_ckpt = CHECKPOINT_DIR / "stage1_base_transformer.pt"
     bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
 
+    available_checkpoints = [
+        stage2_25m_ckpt,
+        stage1_25m_ckpt,
+        stage2_11m_ckpt,
+        stage1_11m_ckpt,
+        stage2_ckpt,
+        stage1_ckpt,
+    ]
+
     if checkpoint is not None:
         selected_ckpt = Path(checkpoint)
-    elif stage2_ckpt.exists():
-        selected_ckpt = stage2_ckpt
-    elif stage1_ckpt.exists():
-        selected_ckpt = stage1_ckpt
     else:
-        console.print("[red]No trained transformer checkpoint found. Train first with: python -m robbie.main --train-stage2[/]")
-        return
+        selected_ckpt = next((c for c in available_checkpoints if c.exists()), None)
+        if selected_ckpt is None:
+            console.print("[red]No trained transformer checkpoint found. Train first with: python -m robbie.main --train-stage2[/]")
+            return
 
     if not bpe_vocab_file.exists():
         console.print(f"[red]BPE vocabulary file not found at {bpe_vocab_file}[/]")
@@ -761,13 +829,23 @@ def run_chat(
     saved_config = raw_data.get("config", None)
     block_size = getattr(saved_config, "block_size", 128) if saved_config else 128
 
-    config = saved_config if isinstance(saved_config, TransformerConfig) else TransformerConfig(
-        vocab_size=tokenizer.vocab_size,
-        block_size=block_size,
-        n_layer=4,
-        n_head=4,
-        n_embd=128,
-    )
+    if isinstance(saved_config, TransformerConfig):
+        config = saved_config
+    elif isinstance(saved_config, dict):
+        config = TransformerConfig(**saved_config)
+    elif saved_config is not None:
+        config = saved_config
+    else:
+        n_layer = 8 if "25m" in selected_ckpt.name else (6 if "11m" in selected_ckpt.name else 4)
+        n_head = 8 if "25m" in selected_ckpt.name else (6 if "11m" in selected_ckpt.name else 4)
+        n_embd = 512 if "25m" in selected_ckpt.name else (384 if "11m" in selected_ckpt.name else 128)
+        config = TransformerConfig(
+            vocab_size=tokenizer.vocab_size,
+            block_size=block_size,
+            n_layer=n_layer,
+            n_head=n_head,
+            n_embd=n_embd,
+        )
     device = get_best_device()
     model = RobbieTransformer(config)
     Trainer.load_checkpoint(selected_ckpt, model)
@@ -848,8 +926,9 @@ def main():
 
     if args.train_stage1:
         run_train_stage1(
+            model_size=args.model_size,
             epochs=args.epochs,
-            batch_size=args.batch_size,
+            batch_size=args.batch_size if args.batch_size != 64 else (32 if args.model_size == "25m" else 64),
             block_size=args.block_size,
             dropout=args.dropout,
             weight_decay=args.weight_decay,
@@ -860,6 +939,7 @@ def main():
 
     if args.train_stage2:
         run_train_stage2(
+            model_size=args.model_size,
             epochs=args.epochs if args.epochs != 5 else 10,
             batch_size=args.batch_size if args.batch_size != 64 else 16,
             block_size=args.block_size,

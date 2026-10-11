@@ -253,3 +253,33 @@ class TestRobbieTransformer:
         out_stopped = model.generate(inp, max_new_tokens=10, stop_token_id=first_gen, temperature=0.0)
         assert out_stopped.shape[1] <= 13
 
+    def test_robbie_25m_configuration_and_parameter_count(self):
+        """Verify Robbie-25M architecture dimensions and ~25M-26M parameter scaling."""
+        from robbie.main import MODEL_PRESETS
+        preset = MODEL_PRESETS["25m"]
+        assert preset["n_layer"] == 8
+        assert preset["n_head"] == 8
+        assert preset["n_embd"] == 512
+
+        config = TransformerConfig(
+            vocab_size=2048,
+            block_size=128,
+            n_layer=preset["n_layer"],
+            n_head=preset["n_head"],
+            n_embd=preset["n_embd"],
+            dropout=0.1,
+        )
+        model = RobbieTransformer(config)
+        param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        # Robbie-25M has ~26.3M parameters (tied embedding head)
+        assert 24_000_000 < param_count < 28_000_000, f"Unexpected param count: {param_count:,}"
+
+        # Test forward pass with dummy batch
+        x = torch.randint(0, 2048, (2, 16))
+        logits, loss = model(x, targets=x)
+        assert logits.shape == (2, 16, 2048)
+        assert loss is not None
+        assert loss.item() > 0.0
+
+
