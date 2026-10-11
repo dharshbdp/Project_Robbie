@@ -1,7 +1,7 @@
 # Default Configuration for Project Robbie
 project_name: "Project Robbie"
-version: "0.0.0"
-phase: 0
+version: "0.1.0"
+phase: 1
 seed: 42
 device: "auto"
 

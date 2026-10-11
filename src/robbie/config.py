@@ -14,7 +14,7 @@ CONFIG_DIR = PROJECT_ROOT / "configs"
 class RobbieConfig:
     """Master configuration for Robbie."""
     project_name: str = "Project Robbie"
-    version: str = "0.0.0"
+    version: str = "0.1.0"
     seed: int = 42
     device: str = "auto"
     data_dir: Path = DATA_DIR

@@ -38,10 +38,10 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 1 — Tokenizer & Model Foundation
 **Version 0.1 — Tokenizer**
-- [ ] Text encoding and decoding
-- [ ] Vocabulary management
-- [ ] Dataset loading and preprocessing
-- [ ] Tokenizer testing
+- [x] Text encoding and decoding
+- [x] Vocabulary management
+- [x] Dataset loading and preprocessing
+- [x] Tokenizer testing
 
 ### Phase 2 — Tiny Language Model
 **Version 0.2 — Tiny LLM**
