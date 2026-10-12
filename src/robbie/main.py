@@ -232,6 +232,19 @@ def parse_args():
         default=None,
         help="Execute automated multi-source web research with grounded citations (Phase 8)",
     )
+    parser.add_argument(
+        "--system",
+        action="store_true",
+        help="Print live computer awareness and development workspace report (Phase 9)",
+    )
+    parser.add_argument(
+        "--processes",
+        type=int,
+        nargs="?",
+        const=10,
+        default=None,
+        help="Display top running processes sorted by memory consumption (default: 10) (Phase 9)",
+    )
     return parser.parse_args()
 
 def run_tokenizer_demo():
@@ -904,7 +917,7 @@ def run_chat(
     user_name = memory.get("user_name")
     if user_name:
         console.print(f"[dim]Welcome back, [bold cyan]{user_name}[/]![/]")
-    console.print("[dim]Commands: /history, /memory, /research, /search, /clear, /help, exit/quit[/]\n")
+    console.print("[dim]Commands: /history, /memory, /research, /search, /system, /processes, /clear, /help, exit/quit[/]\n")
 
     while True:
         try:
@@ -1046,6 +1059,59 @@ def run_research(query: str):
     console.print(Panel(report.to_markdown(), title="[bold green]Research Report[/]", border_style="cyan"))
 
 
+def run_system_report():
+    """Run comprehensive Computer Awareness snapshot (Phase 9)."""
+    from rich.panel import Panel
+    from robbie.system import ComputerAwareness
+
+    console = Console()
+    console.print("\n" + "=" * 65)
+    console.print("       PROJECT ROBBIE — COMPUTER AWARENESS (PHASE 9)")
+    console.print("=" * 65 + "\n")
+
+    ca = ComputerAwareness()
+    with console.status("[bold cyan]Scanning hardware, environment, and workspace...[/]"):
+        snapshot = ca.snapshot(include_processes=True, proc_limit=5)
+
+    console.print(Panel(snapshot.to_markdown(), title="[bold green]Live System & Workspace Snapshot[/]", border_style="cyan"))
+
+
+def run_processes_report(limit: int = 10):
+    """Display top processes sorted by memory consumption (Phase 9)."""
+    from rich.table import Table
+    from robbie.system import ComputerAwareness
+
+    console = Console()
+    console.print("\n" + "=" * 65)
+    console.print(f"       TOP {limit} RUNNING PROCESSES BY MEMORY")
+    console.print("=" * 65 + "\n")
+
+    ca = ComputerAwareness()
+    with console.status("[bold cyan]Querying running processes...[/]"):
+        procs = ca.process_monitor.list_processes(limit=limit)
+
+    if not procs:
+        console.print("[yellow]No process information could be retrieved.[/]")
+        return
+
+    table = Table(title=f"Top {len(procs)} Active Processes")
+    table.add_column("Rank", style="dim", width=6)
+    table.add_column("PID", style="cyan", width=10)
+    table.add_column("Process Name", style="bold yellow", width=32)
+    table.add_column("Memory (MB)", style="green", justify="right", width=14)
+
+    for i, p in enumerate(procs, 1):
+        table.add_row(
+            f"#{i}",
+            str(p.pid),
+            p.name,
+            f"{p.memory_mb:.1f} MB",
+        )
+
+    console.print(table)
+    console.print("")
+
+
 def main():
     args = parse_args()
     logger.info(f"Starting Project Robbie (v{__version__})")
@@ -1168,6 +1234,12 @@ def main():
 
     if args.research is not None:
         run_research(args.research)
+
+    if args.system:
+        run_system_report()
+
+    if args.processes is not None:
+        run_processes_report(limit=args.processes)
 
 if __name__ == "__main__":
     main()

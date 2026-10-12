@@ -106,6 +106,25 @@ class ChatEngine:
                 res_lines.append(f"  [{i}] {r.title} ({r.source})\n      URL: {r.url}\n      {snippet_preview}")
             return "\n".join(res_lines)
 
+        if c in ("/system", "/sys", "/stats"):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            return ca.snapshot().to_markdown()
+
+        if c in ("/processes", "/top", "/procs"):
+            limit = 10
+            if len(parts) >= 2 and parts[1].isdigit():
+                limit = int(parts[1])
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            procs = ca.process_monitor.list_processes(limit=limit)
+            if not procs:
+                return "No process information available."
+            lines = [f"Top {len(procs)} Processes by Memory Usage:"]
+            for i, p in enumerate(procs, 1):
+                lines.append(f"  [{i:2d}] {p.name:<24} (PID {p.pid:<5}) - {p.memory_mb:>7.1f} MB RAM")
+            return "\n".join(lines)
+
         if c == "/help":
             return (
                 "Available commands:\n"
@@ -113,6 +132,8 @@ class ChatEngine:
                 "  /memory             — Inspect remembered facts (like your name)\n"
                 "  /memory set <k> <v> — Store a custom fact in memory\n"
                 "  /history            — View all conversation turns\n"
+                "  /system             — Live computer awareness report (hardware, power, workspace)\n"
+                "  /processes [N]      — List top N processes by memory consumption\n"
                 "  /research <topic>   — Conduct multi-source web research with citations\n"
                 "  /search <query>     — Quick web search across sources\n"
                 "  exit/quit           — End chat session"
@@ -218,6 +239,162 @@ class ChatEngine:
                 report_md = report.to_markdown()
                 self.context.add_assistant_message(report_md)
                 return report_md
+
+        # Check for natural language computer awareness capability questions (Phase 9)
+        awareness_capability_triggers = (
+            "can you monitor my system",
+            "can you check my computer",
+            "can you check my pc",
+            "do you have computer awareness",
+            "can you check system specs",
+            "can you see my computer",
+            "can you check my hardware",
+            "what can you see about my computer",
+        )
+        if any(trig in lower_cleaned for trig in awareness_capability_triggers):
+            reply = (
+                "Yes! I have built-in computer awareness. I can monitor CPU, RAM, GPU, storage, "
+                "battery, running processes, active window, and development workspace status.\n"
+                "You can type `/system` for a full status report, `/processes` for top processes, "
+                "or simply ask me questions like 'How much RAM is free?' or 'What is my battery level?'!"
+            )
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        # Natural language system awareness triggers
+        norm_query = lower_cleaned.rstrip("?.! ")
+
+        system_triggers = (
+            "what are my computer specs",
+            "what are my pc specs",
+            "tell me my computer specs",
+            "what are your system specs",
+            "system specs",
+            "computer specs",
+            "hardware specs",
+            "check my computer",
+            "check my system",
+            "system status",
+            "computer status",
+            "system info",
+            "computer info",
+            "how is my computer doing",
+            "what is my system status",
+            "system report",
+            "computer report",
+        )
+        if norm_query in system_triggers or any(norm_query.startswith(t) for t in ("what are my specs", "check my specs", "what are my hardware")):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            reply = ca.snapshot().to_markdown()
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        ram_triggers = (
+            "how much ram is free",
+            "how much ram do i have",
+            "how much ram is available",
+            "how much ram",
+            "how much memory is free",
+            "how much memory do i have",
+            "how much memory is available",
+            "check ram",
+            "ram usage",
+            "memory usage",
+            "ram status",
+            "what is my ram usage",
+        )
+        if any(t in norm_query for t in ram_triggers):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            mem = ca.hardware.get_memory_info()
+            reply = f"You have {mem.available_gb} GB free out of {mem.total_gb} GB total RAM ({mem.percent_used}% used)."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        battery_triggers = (
+            "what is my battery level",
+            "battery status",
+            "how much battery do i have",
+            "battery percentage",
+            "is my laptop charging",
+            "check battery",
+            "how much battery",
+            "battery percent",
+        )
+        if any(t in norm_query for t in battery_triggers):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            bat = ca.env_monitor.get_battery_info()
+            if bat.present:
+                charging_tag = "charging" if bat.is_charging else "discharging"
+                reply = f"Your battery is at {bat.percent}% ({bat.power_source}, {charging_tag})."
+            else:
+                reply = f"System is currently running on {bat.power_source}."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        gpu_triggers = (
+            "what gpu do i have",
+            "what graphics card do i have",
+            "check gpu",
+            "gpu specs",
+            "gpu usage",
+            "vram usage",
+            "how much vram",
+            "what is my gpu",
+            "what is my graphics card",
+        )
+        if any(t in norm_query for t in gpu_triggers):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            gpu = ca.hardware.get_gpu_info()
+            if gpu.cuda_available:
+                reply = f"You have an NVIDIA {gpu.device_name} with {gpu.vram_free_gb:.1f} GB free out of {gpu.vram_total_gb:.1f} GB total VRAM."
+            else:
+                reply = "CUDA is not detected on your system; Robbie is currently running on CPU."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        proc_triggers = (
+            "what process is using the most memory",
+            "top processes",
+            "what processes are running",
+            "running processes",
+            "check processes",
+            "top memory processes",
+        )
+        if any(t in norm_query for t in proc_triggers):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            procs = ca.process_monitor.list_processes(limit=5)
+            lines = ["Here are the top processes by memory usage:"]
+            for i, p in enumerate(procs, 1):
+                lines.append(f"  {i}. {p.name} (PID {p.pid}): {p.memory_mb:.1f} MB RAM")
+            reply = "\n".join(lines)
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        window_triggers = (
+            "what window is active",
+            "what is my active window",
+            "current window",
+            "active window",
+        )
+        if any(t in norm_query for t in window_triggers):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            win = ca.env_monitor.get_active_window()
+            reply = f"Your active foreground window is '{win.title}'."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
 
         # Add user turn to context
         self.context.add_user_message(cleaned)

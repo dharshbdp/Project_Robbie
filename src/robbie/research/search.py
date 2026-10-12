@@ -127,11 +127,12 @@ class WikipediaSearchEngine:
                     title = item.get("title", "")
                     page_id = item.get("pageid", "")
                     raw_snippet = item.get("snippet", "")
-                    clean_snippet = re.sub(r"<[^>]+>", "", raw_snippet).strip()
+                    from html import unescape
+                    clean_snippet = unescape(re.sub(r"<[^>]+>", "", raw_snippet).strip())
                     article_url = f"https://en.wikipedia.org/?curid={page_id}" if page_id else f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title)}"
                     results.append(
                         SearchResult(
-                            title=f"{title} (Wikipedia)",
+                            title=title,
                             url=article_url,
                             snippet=clean_snippet,
                             source="wikipedia",

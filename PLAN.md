@@ -104,11 +104,11 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 9 — Computer Awareness
 **Version 1.1 — Computer Awareness**
-- [ ] CPU, RAM, GPU, and storage information
-- [ ] Running processes
-- [ ] Active-window and application context
-- [ ] Battery and network status
-- [ ] Development workspace context
+- [x] CPU, RAM, GPU, and storage information (`HardwareMonitor`)
+- [x] Running processes (`ProcessMonitor`, `--processes`, `/processes`)
+- [x] Active-window and application context (`WindowContext`, foreground window detection)
+- [x] Battery and network status (`BatteryInfo`, `NetworkInfo`, latency)
+- [x] Development workspace context (`WorkspaceMonitor`, git branch/commit/modified, codebase metrics)
 
 ### Phase 10 — Computer Tools
 **Version 1.2 — Computer Agent**
