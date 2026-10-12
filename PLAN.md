@@ -72,11 +72,11 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 5 — Conversational Model
 **Version 0.7 — Conversational Robbie**
-- [ ] Conversation formatting
-- [ ] Instruction fine-tuning
-- [ ] Dialogue handling
-- [ ] Context management
-- [ ] Response quality evaluation
+- [x] Conversation formatting (`Role`, `Message`, `ConversationFormatter`)
+- [x] Instruction fine-tuning (Two-stage training pipeline, early stopping, perplexity 5.68)
+- [x] Dialogue handling (`ChatEngine` with interactive slash commands `/history`, `/memory`, `/clear`)
+- [x] Context management (`ConversationContext`, sliding window budget fitting, slot tracking)
+- [x] Response quality evaluation (`ConversationEvaluator`, multi-turn benchmark, 47.8 tokens/sec)
 
 ### Phase 6 — Character & Personality
 **Version 0.8 — Character**

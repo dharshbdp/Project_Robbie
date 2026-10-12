@@ -28,6 +28,14 @@ from robbie.core.models.inspector import (
     benchmark_generation,
 )
 from robbie.core.training.trainer import Trainer, TrainingConfig
+from robbie.core.conversation import (
+    Role,
+    Message,
+    ConversationFormatter,
+    ConversationContext,
+    ChatEngine,
+    ConversationEvaluator,
+)
 
 BENCHMARK_PROMPTS = [
     "ROBBIE: ",
@@ -102,6 +110,11 @@ def parse_args():
         "--chat",
         action="store_true",
         help="Launch an interactive terminal chat session with Robbie",
+    )
+    parser.add_argument(
+        "--eval-conversation",
+        action="store_true",
+        help="Run Phase 5 Conversational Model quality & multi-turn evaluation benchmark",
     )
     parser.add_argument(
         "--block-size",
@@ -861,7 +874,18 @@ def run_chat(
     model.to(device)
     model.eval()
 
-    console.print(f"[dim]Loaded model: {selected_ckpt.name} on {str(device).upper()}[/]\n")
+    console.print(f"[dim]Loaded model: {selected_ckpt.name} on {str(device).upper()}[/]")
+    console.print("[dim]Commands: /history, /memory, /clear, /help, exit/quit[/]\n")
+
+    engine = ChatEngine(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        top_k=25,
+        repetition_penalty=repetition_penalty,
+    )
 
     while True:
         try:
@@ -876,39 +900,115 @@ def run_chat(
             console.print("[dim]Goodbye![/]")
             break
 
-        # Clean enclosing quotes so quoted inputs like '"How do I reverse a list?"' don't perturb prefix tokens
-        cleaned_input = user_input.strip("\"' ")
-        if not cleaned_input:
-            cleaned_input = user_input
-
-        prompt = f"User: {cleaned_input}\nRobbie:"
-        prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
-        input_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=device)
-
         if seed is not None:
             torch.manual_seed(seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
 
-        generated_tensor = model.generate(
-            input_tensor,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
-            top_k=25,
-            stop_token_id=tokenizer.eos_token_id,
-            repetition_penalty=repetition_penalty,
+        reply = engine.respond(user_input)
+        if user_input.strip().startswith("/"):
+            console.print(f"[dim]{reply}[/]\n")
+        else:
+            console.print(f"[bold cyan]Robbie:[/] {reply}\n")
+
+
+def run_eval_conversation(checkpoint: Optional[str] = None):
+    """Run automated Phase 5 Conversational Model quality and multi-turn consistency evaluation."""
+    from rich.table import Table
+
+    console = Console()
+    console.print("\n" + "=" * 65)
+    console.print("   PROJECT ROBBIE — PHASE 5 CONVERSATION EVALUATION")
+    console.print("=" * 65 + "\n")
+
+    stage2_25m_ckpt = CHECKPOINT_DIR / "stage2_25m_conversational_transformer.pt"
+    stage2_11m_ckpt = CHECKPOINT_DIR / "stage2_11m_conversational_transformer.pt"
+    stage2_ckpt = CHECKPOINT_DIR / "stage2_conversational_transformer.pt"
+    bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
+
+    available_checkpoints = [stage2_25m_ckpt, stage2_11m_ckpt, stage2_ckpt]
+
+    if checkpoint is not None:
+        selected_ckpt = Path(checkpoint)
+    else:
+        selected_ckpt = next((c for c in available_checkpoints if c.exists()), None)
+        if selected_ckpt is None:
+            console.print("[red]No stage 2 conversational checkpoint found for evaluation.[/]")
+            return
+
+    if not bpe_vocab_file.exists():
+        console.print(f"[red]BPE vocabulary file not found at {bpe_vocab_file}[/]")
+        return
+
+    tokenizer = BPETokenizer.load(bpe_vocab_file)
+    raw_data = torch.load(selected_ckpt, map_location="cpu", weights_only=False)
+    saved_config = raw_data.get("config", None)
+    block_size = getattr(saved_config, "block_size", 128) if saved_config else 128
+
+    if isinstance(saved_config, TransformerConfig):
+        config = saved_config
+    elif isinstance(saved_config, dict):
+        config = TransformerConfig(**saved_config)
+    else:
+        n_layer = 8 if "25m" in selected_ckpt.name else 4
+        n_head = 8 if "25m" in selected_ckpt.name else 4
+        n_embd = 512 if "25m" in selected_ckpt.name else 128
+        config = TransformerConfig(
+            vocab_size=tokenizer.vocab_size,
+            block_size=block_size,
+            n_layer=n_layer,
+            n_head=n_head,
+            n_embd=n_embd,
         )
-        gen_ids = generated_tensor[0].tolist()[len(prompt_ids):]
-        response_text = tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
 
-        if "\nUser:" in response_text:
-            response_text = response_text.split("\nUser:")[0].strip()
-        if "<|endoftext|>" in response_text:
-            response_text = response_text.split("<|endoftext|>")[0].strip()
-        if "<isendoftextis>" in response_text:
-            response_text = response_text.split("<isendoftextis>")[0].strip()
+    device = get_best_device()
+    model = RobbieTransformer(config)
+    Trainer.load_checkpoint(selected_ckpt, model)
+    model.to(device)
+    model.eval()
 
-        console.print(f"[bold cyan]Robbie:[/] {response_text}\n")
+    console.print(f"[dim]Loaded model: {selected_ckpt.name} on {str(device).upper()}[/]\n")
+
+    engine = ChatEngine(
+        model=model,
+        tokenizer=tokenizer,
+        device=device,
+        max_tokens=50,
+        temperature=0.4,
+    )
+
+    console.print("[yellow]Running multi-turn scenario benchmark...[/]")
+    results = ConversationEvaluator.run_multi_turn_test(engine)
+
+    table = Table(title="Phase 5 Multi-Turn Conversation Evaluation")
+    table.add_column("Turn", style="dim", width=6)
+    table.add_column("Intent", style="cyan", width=18)
+    table.add_column("User Input", style="yellow", width=28)
+    table.add_column("Robbie Response", style="green", width=42)
+    table.add_column("Latency", style="magenta", justify="right")
+
+    for i, t in enumerate(results["turns"], 1):
+        table.add_row(
+            f"#{i}",
+            t["intent"],
+            t["user"],
+            t["reply"][:40] + ("..." if len(t["reply"]) > 40 else ""),
+            f"{t['latency_sec']:.2f}s",
+        )
+
+    console.print(table)
+    retention_color = "green" if results["name_recalled"] else "red"
+    retention_status = "PASSED" if results["name_recalled"] else "FAILED"
+    console.print(f"\nName Retention Check: [{retention_color}]{retention_status}[/]")
+    console.print(f"Remembered Facts: [bold]{results['slots']}[/]\n")
+
+    # Measure generation throughput
+    console.print("[yellow]Measuring generation throughput...[/]")
+    speed = ConversationEvaluator.measure_generation_speed(engine)
+    console.print(f"Throughput: [bold green]{speed['tokens_per_second']}[/] tokens/sec (Latency: {speed['elapsed_seconds']}s)")
+    console.print(f"Distinct-1 N-gram Diversity: [bold cyan]{speed['distinct_1'] * 100:.1f}%[/]")
+    console.print(f"Distinct-2 N-gram Diversity: [bold cyan]{speed['distinct_2'] * 100:.1f}%[/]\n")
+    console.print("=" * 65 + "\n")
 
 def main():
     args = parse_args()
@@ -975,6 +1075,9 @@ def main():
             repetition_penalty=args.repetition_penalty,
             seed=args.seed,
         )
+
+    if args.eval_conversation:
+        run_eval_conversation(checkpoint=args.checkpoint)
 
     if args.compare_checkpoints:
         from scripts.compare_checkpoints import compare_checkpoints
