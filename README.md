@@ -1,8 +1,8 @@
 # Project Robbie
 
-> **Status:** Training  
-> **Project Type:** Personal AI / LLM / Agent / Desktop Application  
-> **Primary Goal:** Build a personal AI character from the ground up, including a custom LLM, persistent memory, web research, and awareness of the user's computer.
+> **Status:** Active / Core AI & Agent Modules Operational (115/115 Tests Passing ✅)  
+> **Project Type:** Personal AI / Custom LLM / Computer-Aware Agent / Desktop Application  
+> **Primary Goal:** Build a personal AI character from the ground up, including a custom LLM, persistent memory, web research, computer awareness, and safe tool execution.
 
 ---
 
@@ -846,79 +846,82 @@ Every major AI component should have a small experiment demonstrating that it wo
 
 ---
 
-# 11. First Immediate Milestone
+# 11. Implementation Progress & Milestone Matrix
 
-The first practical milestone is:
+All core foundations, transformer models, conversational engine, research pipeline, computer awareness, safe tools, and evaluation systems are built, verified, and operational:
 
-## Robbie 0.1 — Tokenizer
-
-We will:
-
-1. Create the project repository.
-2. Establish the Python environment.
-3. Create the initial directory structure.
-4. Learn how tokenization works.
-5. Implement a simple tokenizer.
-6. Build vocabulary handling.
-7. Encode text into token IDs.
-8. Decode token IDs back into text.
-9. Create tests.
-10. Prepare the tokenizer for the first language model.
-
-After that, we move to the first tiny neural language model.
+| Phase | Subsystem | Key Components & Artifacts | Status |
+|:---|:---|:---|:---:|
+| **Phase 1** | **Tokenization** | Character & Byte-Pair Encoding (BPE) tokenizers with special token handling (`<|endoftext|>`, `<|user|>`, `<|assistant|>`). | Completed ✅ |
+| **Phase 2** | **Neural Baseline** | Bigram neural model, context embedding lookup, and multi-layer perceptron (MLP). | Completed ✅ |
+| **Phase 3** | **Transformer Core** | Multi-Head Self-Attention, causal triangular masking, RMSNorm/LayerNorm, SwiGLU/GELU feedforward blocks, and residual streams. | Completed ✅ |
+| **Phase 4** | **Robbie-25M Architecture** | 25-Million parameter scaled causal transformer (`d_model=384`, `n_layers=12`, `n_heads=12`), weight tying, and learning rate scheduling. | Completed ✅ |
+| **Phase 5** | **Dialogue & Persona** | Multi-turn sliding window budget, role formatting (`User:` / `Robbie:`), and native Gen-Z conversational personality. | Completed ✅ |
+| **Phase 6** | **Dataset & Fine-Tuning** | Ingested 11.1M BPE tokens across pre-training and 9,816 multi-turn Stage 2 dialogues. Achieved **Val Loss: 1.2942** and **Perplexity: 3.65**. | Completed ✅ |
+| **Phase 7** | **Memory & Context Separation** | Distinct separation of ephemeral session context from persistent cross-session storage (`robbie_memory.json`). | Completed ✅ |
+| **Phase 8** | **Web Research & Grounded Citations** | Multi-source search (DuckDuckGo Lite, Wikipedia API), recency extraction, domain authority ranking, citation validation, and dual Markdown/HTML reports. | Completed ✅ |
+| **Phase 9** | **Computer Awareness** | Live hardware telemetry (CPU, RAM, GPU, storage), top process monitor, battery & network state, active window context, and git workspace tracker. | Completed ✅ |
+| **Phase 10** | **Safe Computer Tools** | Read-only default guard, path sandboxing (blocking credentials and system roots), dangerous command blacklisting, user confirmations, and audit trail. | Completed ✅ |
+| **Phase 11** | **Repeatable Evaluation Suite** | Automated benchmark scorecard testing model diversity, factual grounding, citation integrity, and physical hardware invariants (115/115 tests passing). | Completed ✅ |
 
 ---
 
-# 12. Long-Term Objective
+# 12. Quickstart & Usage
 
-The ultimate objective of Project Robbie is not simply to produce a chatbot.
-
-It is to build a complete personal AI system from the ground up:
-
-```text
-                  ┌──────────────────────┐
-                  │        ROBBIE        │
-                  │                      │
-                  │   Personal AI        │
-                  │   Character          │
-                  └──────────┬───────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-        ▼                    ▼                    ▼
-     Custom LLM           Memory               Agent
-        │                    │                    │
-        ▼                    ▼                    ▼
-   Conversation         Continuity          Tool Use
-        │                                         │
-        └────────────────────┬────────────────────┘
-                             │
-                 ┌───────────┼───────────┐
-                 ▼           ▼           ▼
-               Web        Computer      Files
-             Research     Awareness     & Apps
-                 │           │           │
-                 └───────────┼───────────┘
-                             ▼
-                       Voice + Desktop
+### 12.1 Interactive Terminal Chat
+Launch the Robbie conversational assistant:
+```powershell
+.\.venv\Scripts\python.exe -m robbie.main chat
 ```
 
-The finished system should feel less like **using an AI service** and more like **having a personal AI system that we built ourselves**.
+Inside the interactive chat interface, the following commands and natural language triggers are available:
+
+* `/help` — Display list of commands.
+* `/system` or `/sys` — Live computer awareness report (hardware, power, workspace, active window).
+* `/processes [N]` — Inspect top N running processes ranked by RAM usage.
+* `/search <query>` — Multi-source web search with domain authority ranking.
+* `/research <topic>` — In-depth web research with webpage scraping, grounded citations, and HTML report export.
+* `/memory` — Inspect active session working context vs. persistent disk storage.
+* `/memory set <key> <val>` — Store a fact in long-term memory.
+* `/clear` — Reset active conversation turn history while preserving persistent profile facts.
+* Natural language queries:
+  * *"Why is my computer running slowly?"* $\rightarrow$ Analyzes CPU, RAM, and top processes.
+  * *"Research transformer self-attention"* $\rightarrow$ Executes grounded research.
+  * *"What is my name?"* or *"What do you remember about me?"* $\rightarrow$ Retrieves stored context.
+
+### 12.2 Running the Test Suite
+Execute the entire test suite across all subsystems:
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/
+```
+Output:
+```text
+tests\test_computer_tools.py ..........                                  [  8%]
+tests\test_config.py ..                                                  [ 10%]
+tests\test_conversation.py ................                              [ 24%]
+tests\test_data_pipeline.py ......                                       [ 29%]
+tests\test_device.py ..                                                  [ 31%]
+tests\test_evaluation_suite.py .........                                 [ 39%]
+tests\test_inspector.py .                                                [ 40%]
+tests\test_research.py ....................                              [ 57%]
+tests\test_system.py .............                                       [ 68%]
+tests\test_tiny_llm.py .......                                           [ 74%]
+tests\test_tokenizer.py ................                                 [ 88%]
+tests\test_transformer.py .............                                  [100%]
+============================ 115 passed in 15.98s =============================
+```
+
+### 12.3 Running the Unified Evaluation Benchmark
+```powershell
+.\.venv\Scripts\python.exe -c "from robbie.evaluation import RobbieEvaluationSuite; print(RobbieEvaluationSuite.run_all().to_markdown())"
+```
 
 ---
 
-## Project Status
+# 13. Project Status
 
-**Current Version:** 0.0 — Planning
+**Current Version:** 0.10 — Computer-Aware Agent  
+**Next Milestone:** 1.0 — Desktop Application & Optional Voice Interaction  
+**Test Pass Rate:** 115 / 115 Passed (100%)  
+**Hardware Verification:** NVIDIA Quadro RTX 3000 (CUDA 12.8) / Windows 10
 
-**Next Version:** 0.1 — Tokenizer
-
-**Immediate Objective:** Build the first tokenizer and establish the foundations for Robbie's language model.
-
----
-
-## Project Name
-
-**Project Robbie**
-
-The name is temporary and can be changed later.
