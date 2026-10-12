@@ -51,30 +51,56 @@ class ChatEngine:
 
         if c == "/memory":
             if len(parts) == 1 or parts[1].lower() == "list":
-                if not self.context.slots:
-                    return "Working memory is currently empty."
-                items = "\n".join(f"  • {k} = '{v}'" for k, v in self.context.slots.items())
-                return f"Remembered facts:\n{items}"
+                bk = self.context.get_memory_breakdown()
+                sess = bk["session_context"]
+                pers = bk["persistent_storage"]
+                lines = [
+                    "🧠 **Active Session Context (Working Memory):**",
+                    f"  • Turns in session: {sess['turn_count']}",
+                    f"  • Current topic: {sess['current_topic'] or 'None'}",
+                ]
+                for k, v in sess["session_slots"].items():
+                    if k not in ("session_start_time", "current_topic"):
+                        lines.append(f"  • {k} = '{v}'")
+
+                lines.append("\n💾 **Persistent Storage (Cross-Session Disk Memory):**")
+                if pers["profile"]:
+                    for k, v in pers["profile"].items():
+                        lines.append(f"  • {k} = '{v}'")
+                else:
+                    lines.append("  • (No persistent profile attributes stored yet)")
+                lines.append(f"  • Saved notes: {pers['notes_count']} | Episodes: {pers['episodes_count']}")
+                if pers["store_path"] != "none":
+                    lines.append(f"  • File: {pers['store_path']}")
+                return "\n".join(lines)
+
             if parts[1].lower() == "set" and len(parts) >= 4:
                 k = parts[2]
                 v = " ".join(parts[3:])
-                self.context.slots[k] = v
+                self.context.persistent_slots[k] = v
                 if self.context.persistent_memory is not None:
                     self.context.persistent_memory.set(k, v)
-                return f"Saved to memory: {k} = '{v}'"
+                return f"Saved to persistent memory: {k} = '{v}'"
+
             if parts[1].lower() == "del" and len(parts) >= 3:
                 k = parts[2]
-                if k in self.context.slots:
-                    del self.context.slots[k]
+                deleted = False
+                if k in self.context.persistent_slots:
+                    del self.context.persistent_slots[k]
                     if self.context.persistent_memory is not None:
                         self.context.persistent_memory.delete(k)
+                    deleted = True
+                if k in self.context.session_slots:
+                    del self.context.session_slots[k]
+                    deleted = True
+                if deleted:
                     return f"Deleted from memory: '{k}'"
                 return f"Fact '{k}' was not found in memory."
+
             if parts[1].lower() == "clear":
-                self.context.slots.clear()
-                if self.context.persistent_memory is not None:
-                    self.context.persistent_memory.clear()
-                return "All memory attributes cleared!"
+                self.context.clear(keep_slots=False, keep_persistent=False)
+                return "All memory attributes (session and persistent) cleared!"
+
             return "Usage: /memory [list | set <key> <val> | del <key> | clear]"
 
         if c == "/history":

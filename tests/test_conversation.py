@@ -266,3 +266,58 @@ class TestRobbiePersonality:
         greeting = RobbiePersonality.get_personalized_greeting(user_name="Dharsh")
         assert "Dharsh" in greeting
 
+
+class TestSessionVsPersistentMemory:
+    """Rigorous tests verifying retention and separation of session context vs persistent storage."""
+
+    def test_session_vs_persistent_separation(self):
+        from robbie.memory.store import PersistentMemory
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            store_file = Path(tmp_dir) / "test_mem.json"
+            pm = PersistentMemory(store_path=store_file)
+
+            tok = CharTokenizer()
+            tok.train(["User: Robbie: Testing memory separation"])
+            ctx = ConversationContext(tokenizer=tok, persistent_memory=pm)
+
+            # 1. User introduces themselves and mentions topic
+            ctx.add_user_message("Hello! My name is Dharsh and let's talk about Transformers.")
+
+            # Name should be in persistent storage (and synced to disk)
+            assert ctx.persistent_slots.get("user_name") == "Dharsh"
+            assert pm.get("user_name") == "Dharsh"
+
+            # Topic should be in session working memory
+            assert ctx.session_slots.get("current_topic") == "Transformers"
+            # Topic must NOT pollute persistent disk profile
+            assert pm.get("current_topic") is None
+
+            # 2. Check memory breakdown
+            breakdown = ctx.get_memory_breakdown()
+            assert breakdown["session_context"]["current_topic"] == "Transformers"
+            assert breakdown["session_context"]["turn_count"] == 1
+            assert breakdown["persistent_storage"]["profile"]["user_name"] == "Dharsh"
+
+            # 3. Direct inquiry answers
+            topic_reply = ctx.check_direct_slot_answer("what are we talking about?")
+            assert "discussing Transformers" in topic_reply
+
+            mem_reply = ctx.check_direct_slot_answer("what do you remember about me?")
+            assert "User Name: Dharsh" in mem_reply
+            assert "Active Session Context" in mem_reply
+
+            # 4. Clear session history with keep_persistent=True (default)
+            ctx.clear(keep_persistent=True)
+            assert ctx.turn_count == 0
+            assert ctx.session_slots.get("current_topic") is None
+            # Persistent memory MUST survive session clearing!
+            assert ctx.persistent_slots.get("user_name") == "Dharsh"
+            assert pm.get("user_name") == "Dharsh"
+
+            # 5. Clear persistent memory explicitly
+            ctx.clear(keep_persistent=False)
+            assert ctx.persistent_slots.get("user_name") is None
+            assert pm.get("user_name") is None
+
+

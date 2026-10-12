@@ -18,6 +18,8 @@ from robbie.research.scraper import (
 from robbie.research.synthesizer import (
     ScoredEvidence,
     ResearchSynthesizer,
+    CitationValidator,
+    CitationValidationResult,
 )
 from robbie.research.assistant import (
     ResearchReport,
@@ -312,3 +314,142 @@ class TestChatEngineResearchCommands:
             assert "Research Report: BPE Tokenization" in res
             assert "BPE iteratively merges frequent character pairs [1]" in res
             assert "[1] BPE Guide" in res
+
+
+class TestResearchAccuracyAndValidation:
+    """Rigorous tests for research accuracy, recency, ranking, citation validation, and HTML formatting."""
+
+    def test_citation_validator_grounded_vs_ungrounded(self):
+        sources = [
+            SearchResult(
+                title="Stage 2 Training Logs",
+                url="https://robbie.local/training",
+                snippet="Robbie achieved optimal validation loss 1.2942 with perplexity 3.65 at epoch 1.",
+                source="web",
+            ),
+            SearchResult(
+                title="Generic Machine Learning",
+                url="https://example.com/ml",
+                snippet="Neural networks are optimized using stochastic gradient descent and Adam.",
+                source="web",
+            )
+        ]
+
+        # 1. Grounded assertion with matching number
+        grounded_claim = "The optimal validation loss reached 1.2942 at epoch 1."
+        res1 = CitationValidator.validate_claim(grounded_claim, sources)
+        assert res1.is_grounded is True
+        assert 1 in res1.matched_sources
+
+        # 2. Number mismatch / ungrounded claim
+        mismatched_claim = "The optimal validation loss reached 0.0543 at epoch 99."
+        res2 = CitationValidator.validate_claim(mismatched_claim, sources)
+        assert 1 not in res2.matched_sources
+
+        # 3. Completely hallucinated claim
+        hallucinated = "Quantum superconducting qubits performed telepathic teleportation in 1890."
+        res3 = CitationValidator.validate_claim(hallucinated, sources)
+        assert res3.is_grounded is False
+        assert len(res3.matched_sources) == 0
+
+    def test_source_ranking_authority_and_recency(self):
+        engine = UnifiedSearchEngine()
+        candidates = [
+            SearchResult(
+                title="Deep Learning Breakthroughs 2025",
+                url="https://arxiv.org/abs/2501.99999",
+                snippet="A 2025 survey of state of the art transformer architectures and self-attention.",
+                source="web",
+                published_date="2025-01-15",
+                authority_score=1.6,
+            ),
+            SearchResult(
+                title="Old Notes on AI",
+                url="https://free-ad-click.com/ai",
+                snippet="Transformer architectures from 2017.",
+                source="web",
+                published_date="2017-06-01",
+                authority_score=0.7,
+            ),
+        ]
+
+        ranked = engine.rank_sources(candidates, "latest 2025 transformer architectures")
+        assert len(ranked) == 2
+        # arXiv 2025 should rank far above outdated ad click site
+        assert ranked[0].url == "https://arxiv.org/abs/2501.99999"
+        assert ranked[0].score > ranked[1].score
+        assert ranked[1].is_outdated is True
+
+    def test_url_sanitization(self):
+        from robbie.research.search import normalize_and_clean_url
+        raw_ddg = "https://duckduckgo.com/l/?uddg=https%3A%2F%2Fpytorch.org%2Fdocs%3Futm_source%3Dtwitter%26utm_medium%3Dsocial&rut=1"
+        clean = normalize_and_clean_url(raw_ddg)
+        assert "duckduckgo.com" not in clean
+        assert "utm_source" not in clean
+        assert "utm_medium" not in clean
+        assert clean == "https://pytorch.org/docs"
+
+    def test_html_report_formatting(self):
+        report = ResearchReport(
+            query="Transformer Attention & Heads",
+            summary="Multi-head attention allows joint modeling of diverse representations.",
+            key_findings=[
+                "Self-attention computes Q, K, and V matrices [1].",
+                "FlashAttention speeds up training by reducing HBM memory reads [1, 2].",
+            ],
+            citations=[
+                {
+                    "index": 1,
+                    "title": "Attention Paper",
+                    "url": "https://arxiv.org/abs/1706.03762",
+                    "source": "arxiv",
+                    "published_date": "2017-06-12",
+                    "is_outdated": False,
+                },
+                {
+                    "index": 2,
+                    "title": "FlashAttention Paper",
+                    "url": "https://arxiv.org/abs/2205.14135",
+                    "source": "arxiv",
+                    "published_date": "2022-05-27",
+                    "is_outdated": False,
+                },
+            ],
+            sources_count=2,
+            latency_sec=0.35,
+            citation_validation_rate=1.0,
+        )
+
+        html_out = report.to_html()
+        assert "<article class=\"robbie-research-report\">" in html_out
+        assert "<h2>Research Report: Transformer Attention &amp; Heads</h2>" in html_out
+        assert "Grounded Citations: 100% verified" in html_out
+        assert "<sup><a href=\"#source-1\">[1]</a></sup>" in html_out
+        assert "<sup><a href=\"#source-1\">[1]</a>, <a href=\"#source-2\">[2]</a></sup>" in html_out
+        assert "<li id=\"source-1\">" in html_out
+        assert "<li id=\"source-2\">" in html_out
+
+    def test_html_boilerplate_stripping(self):
+        html_with_boilerplate = """
+        <html>
+        <head><title>Clean AI Research</title></head>
+        <body>
+            <div class="banner">Accept all cookies to continue to our website.</div>
+            <p>Subscribe to our newsletter for daily spam updates.</p>
+            <article>
+                <p>Causal transformers use lower-triangular attention masks to prevent information leakage.</p>
+            </article>
+            <div class="footer">All rights reserved 2026.</div>
+        </body>
+        </html>
+        """
+        extractor = HTMLContentExtractor()
+        extractor.feed(html_with_boilerplate)
+        title, text = extractor.get_extracted_content()
+
+        assert title == "Clean AI Research"
+        assert "Accept all cookies" not in text
+        assert "Subscribe to our newsletter" not in text
+        assert "All rights reserved" not in text
+        assert "Causal transformers use lower-triangular attention masks" in text
+

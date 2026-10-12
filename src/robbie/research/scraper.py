@@ -22,17 +22,28 @@ class WebpageDocument:
 
 
 class HTMLContentExtractor(HTMLParser):
-    """Robust HTML text extractor that strips scripts, styles, and chrome elements."""
+    """Robust HTML text extractor that strips scripts, styles, chrome, and boilerplate elements."""
 
     IGNORED_TAGS = {
         "script", "style", "nav", "footer", "header", "noscript",
-        "svg", "aside", "form", "button", "iframe"
+        "svg", "aside", "form", "button", "iframe", "meta", "link",
+        "canvas", "dialog", "template", "audio", "video", "select",
+        "option", "textarea"
     }
 
     BLOCK_TAGS = {
         "p", "h1", "h2", "h3", "h4", "h5", "h6", "li",
         "div", "article", "section", "blockquote", "tr"
     }
+
+    BOILERPLATE_PATTERNS = [
+        re.compile(r"\b(accept|reject|manage)\s+(all\s+)?cookies\b", re.IGNORECASE),
+        re.compile(r"\bcookie\s+(policy|settings|notice|consent|preferences)\b", re.IGNORECASE),
+        re.compile(r"\bsubscribe\s+to\s+(our\s+)?newsletter\b", re.IGNORECASE),
+        re.compile(r"\ball\s+rights\s+reserved\b", re.IGNORECASE),
+        re.compile(r"\bshare\s+on\s+(facebook|twitter|linkedin|reddit)\b", re.IGNORECASE),
+        re.compile(r"^(advertisement|sponsored|privacy\s+policy|terms\s+of\s+(?:use|service))$", re.IGNORECASE),
+    ]
 
     def __init__(self):
         super().__init__()
@@ -55,7 +66,6 @@ class HTMLContentExtractor(HTMLParser):
         if self._tag_stack and self._tag_stack[-1] == tag_lower:
             self._tag_stack.pop()
         elif tag_lower in self._tag_stack:
-            # Pop up to matching tag
             while self._tag_stack and self._tag_stack[-1] != tag_lower:
                 self._tag_stack.pop()
             if self._tag_stack:
@@ -74,24 +84,28 @@ class HTMLContentExtractor(HTMLParser):
         if any(ignored in self._tag_stack for ignored in self.IGNORED_TAGS):
             return
 
-        cleaned = data.strip()
+        cleaned = data.replace("\xa0", " ").strip()
         if cleaned:
             self._current_block.append(cleaned)
 
     def _flush_block(self):
         if self._current_block:
-            block_str = " ".join(self._current_block)
-            # Remove excessive inner spaces
-            block_str = re.sub(r"\s+", " ", block_str).strip()
-            if len(block_str) >= 20:  # Ignore trivial tiny snippets like 'Home', 'Menu'
-                self.text_blocks.append(block_str)
+            raw_str = " ".join(self._current_block)
+            raw_str = unescape(raw_str).replace("\xa0", " ")
+            block_str = re.sub(r"\s+", " ", raw_str).strip()
+
+            # Filter trivial snippets and web boilerplate
+            if len(block_str) >= 20:
+                is_boilerplate = any(p.search(block_str) for p in self.BOILERPLATE_PATTERNS)
+                if not is_boilerplate:
+                    self.text_blocks.append(block_str)
             self._current_block = []
 
     def get_extracted_content(self) -> Tuple[str, str]:
         """Return (title, clean_text_paragraphs)."""
         self._flush_block()
         title = unescape(" ".join(self.title_parts).strip())
-        text = unescape("\n\n".join(self.text_blocks).strip())
+        text = "\n\n".join(self.text_blocks).strip()
         return title, text
 
 

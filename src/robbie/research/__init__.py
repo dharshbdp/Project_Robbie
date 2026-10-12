@@ -14,6 +14,8 @@ from robbie.research.scraper import (
 from robbie.research.synthesizer import (
     ScoredEvidence,
     ResearchSynthesizer,
+    CitationValidator,
+    CitationValidationResult,
 )
 from robbie.research.assistant import (
     ResearchReport,
@@ -30,6 +32,9 @@ __all__ = [
     "WebpageScraper",
     "ScoredEvidence",
     "ResearchSynthesizer",
+    "CitationValidator",
+    "CitationValidationResult",
     "ResearchReport",
     "ResearchAssistant",
 ]
+
