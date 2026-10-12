@@ -82,14 +82,40 @@ class ChatEngine:
             history_lines = [f"[{m.role.value}] {m.content}" for m in self.context.messages]
             return "\n".join(history_lines)
 
+        if c == "/research":
+            if len(parts) < 2:
+                return "Usage: /research <topic or question>"
+            query_str = " ".join(parts[1:])
+            from robbie.research import ResearchAssistant
+            ra = ResearchAssistant()
+            report = ra.research(query_str, max_sources=4)
+            return report.to_markdown()
+
+        if c == "/search":
+            if len(parts) < 2:
+                return "Usage: /search <query>"
+            query_str = " ".join(parts[1:])
+            from robbie.research import ResearchAssistant
+            ra = ResearchAssistant()
+            results = ra.quick_search(query_str, max_results=5)
+            if not results:
+                return f"No search results found for '{query_str}'."
+            res_lines = [f"Web search results for '{query_str}':"]
+            for i, r in enumerate(results, 1):
+                snippet_preview = (r.snippet[:120] + "...") if len(r.snippet) > 120 else r.snippet
+                res_lines.append(f"  [{i}] {r.title} ({r.source})\n      URL: {r.url}\n      {snippet_preview}")
+            return "\n".join(res_lines)
+
         if c == "/help":
             return (
                 "Available commands:\n"
-                "  /clear    — Clear current conversation history\n"
-                "  /memory   — Inspect remembered facts (like your name)\n"
+                "  /clear              — Clear current conversation history\n"
+                "  /memory             — Inspect remembered facts (like your name)\n"
                 "  /memory set <k> <v> — Store a custom fact in memory\n"
-                "  /history  — View all conversation turns\n"
-                "  exit/quit — End chat session"
+                "  /history            — View all conversation turns\n"
+                "  /research <topic>   — Conduct multi-source web research with citations\n"
+                "  /search <query>     — Quick web search across sources\n"
+                "  exit/quit           — End chat session"
             )
         return None
 
@@ -105,6 +131,23 @@ class ChatEngine:
             return cmd_result
 
         user_name = self.context.slots.get("user_name")
+
+        # Check if user is introducing their name (e.g. "My name is Dharsh", "I am Dharsh")
+        intro_slots = self.context.extract_slots(cleaned)
+        intro_name = intro_slots.get("user_name")
+        lower_cleaned = cleaned.lower()
+        is_self_intro = intro_name and (
+            lower_cleaned.startswith("my name is")
+            or lower_cleaned.startswith("i am ")
+            or lower_cleaned.startswith("call me ")
+            or lower_cleaned.startswith("name's ")
+            or "my name is " in lower_cleaned
+        )
+        if is_self_intro:
+            self.context.add_user_message(cleaned)
+            intro_reply = f"Nice to meet you, {intro_name}! I'll remember that. How can I help you today?"
+            self.context.add_assistant_message(intro_reply)
+            return intro_reply
 
         # Check for character affirmations & compliments (Phase 6)
         affirmation_reply = RobbiePersonality.get_affirmation_response(cleaned, user_name=user_name)
@@ -148,12 +191,26 @@ class ChatEngine:
         response_text = self.tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
 
         # Stop token string post-processing
-        if "\nUser:" in response_text:
-            response_text = response_text.split("\nUser:")[0].strip()
-        if "<|endoftext|>" in response_text:
-            response_text = response_text.split("<|endoftext|>")[0].strip()
-        if "<isendoftextis>" in response_text:
-            response_text = response_text.split("<isendoftextis>")[0].strip()
+        if response_text.startswith("Robbie:"):
+            response_text = response_text[len("Robbie:"):].strip()
+        if response_text.startswith("Assistant:"):
+            response_text = response_text[len("Assistant:"):].strip()
+
+        stop_markers = [
+            "\nUser:",
+            "\nRobbie:",
+            "\nAssistant:",
+            "\nSystem:",
+            "User:",
+            "Robbie:",
+            "Assistant:",
+            "<|endoftext|>",
+            "<isendoftextis>",
+            "<|im_end|>",
+        ]
+        for marker in stop_markers:
+            if marker in response_text:
+                response_text = response_text.split(marker)[0].strip()
 
         # Fallback if empty response generated
         if not response_text:

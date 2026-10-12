@@ -281,12 +281,56 @@ def get_expanded_stage2_dialogues() -> List[Dict[str, Any]]:
         "Cross-entropy loss measures the difference between predicted token probability distributions and the actual target tokens: `Loss = -log(P(target))`. Minimizing cross-entropy maximizes the probability assigned to the true next token."
     )
     add_pair(
+        "What is validation loss?",
+        "Validation loss evaluates how well a model generalizes to unseen test data that was withheld during training. It is calculated by running a forward pass on the validation set without updating weights. If training loss drops while validation loss rises, the model is overfitting."
+    )
+    add_pair(
+        "Can you tell me what is validation loss?",
+        "Validation loss measures model performance on a separate validation dataset that the network has never trained on. It reveals whether the model is truly learning generalizable patterns or merely memorizing training examples."
+    )
+    add_pair(
+        "Can you tell me what is validation loss ?",
+        "Validation loss measures how accurately the model predicts unseen test data. During training, we compute validation loss after each epoch to monitor generalization and detect overfitting early."
+    )
+    add_pair(
+        "what is validation loss",
+        "Validation loss is the error metric computed on held-out validation data. It tells you how well your neural network generalizes to new, unseen examples."
+    )
+    add_pair(
+        "what is validation loss ?",
+        "Validation loss measures error on held-out data to assess how well your model generalizes beyond the training set. A low validation loss means the model generalizes well."
+    )
+    add_pair(
+        "What is training loss?",
+        "Training loss measures the prediction error on the dataset currently being used to train the model. As the optimizer updates network weights via backpropagation, training loss steadily decreases."
+    )
+    add_pair(
+        "what is training loss",
+        "Training loss is the average error calculated on the training set during optimization. It indicates how well the model fits the training examples."
+    )
+    add_pair(
+        "What is the difference between training loss and validation loss?",
+        "Training loss measures error on data the model is actively learning from, whereas validation loss measures error on held-out data the model has never seen. Comparing both reveals whether the model is generalizing (both losses decrease) or overfitting (training loss decreases while validation loss increases)."
+    )
+    add_pair(
         "What is perplexity?",
         "Perplexity is the exponent of cross-entropy loss: `PPL = exp(Loss)`. It represents the effective branching factor: how many tokens the model is equally uncertain between when predicting the next token. Lower perplexity indicates better prediction."
     )
     add_pair(
         "What is an epoch?",
         "An epoch represents one complete pass through the entire training dataset. For example, in 5 epochs, the model observes every training sample 5 times."
+    )
+    add_pair(
+        "What is an epoch ?",
+        "An epoch is one full cycle through all batches in the training dataset. Training multiple epochs allows the network to iteratively refine its internal weights."
+    )
+    add_pair(
+        "what is an epoch",
+        "An epoch is one complete training iteration over the entire dataset."
+    )
+    add_pair(
+        "what is an epoch ?",
+        "An epoch is one complete pass through the training data, allowing the model to see every sample once per epoch."
     )
     add_pair(
         "What is batch size?",
@@ -331,6 +375,22 @@ def get_expanded_stage2_dialogues() -> List[Dict[str, Any]]:
     add_pair(
         "What is overfitting?",
         "Overfitting occurs when a neural network memorizes training data noise rather than learning generalizable patterns. It is detected when training loss continues decreasing while validation loss begins increasing."
+    )
+    add_pair(
+        "What is underfitting?",
+        "Underfitting occurs when a machine learning model is too simple to capture the underlying structure of the data, resulting in poor performance on both training and validation sets."
+    )
+    add_pair(
+        "How do I prevent overfitting?",
+        "To prevent overfitting, use regularization techniques like dropout, weight decay (L2 regularization), early stopping, data augmentation, or train on a larger and more varied dataset."
+    )
+    add_pair(
+        "What is AdamW?",
+        "AdamW is an optimization algorithm that decouples weight decay (L2 regularization) from gradient updates. This fixes the standard Adam optimizer's flawed weight decay implementation and improves generalization in transformers."
+    )
+    add_pair(
+        "What is fine-tuning?",
+        "Fine-tuning is the process of taking a pre-trained model and training it further on a smaller, domain-specific or conversational dataset with a lower learning rate to adapt its capabilities."
     )
     add_pair(
         "What are positional embeddings?",

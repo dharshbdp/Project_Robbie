@@ -90,8 +90,25 @@ class ConversationContext:
 
     def check_direct_slot_answer(self, user_query: str) -> Optional[str]:
         """Check if query is asking for a remembered fact that can be answered accurately."""
-        q = user_query.strip().lower()
-        if "what is my name" in q or "what's my name" in q or "who am i" in q:
+        q = user_query.strip().lower().rstrip("?!., ")
+        name_inquiry_patterns = [
+            "what is my name",
+            "what's my name",
+            "whats my name",
+            "what my name is",
+            "who am i",
+            "do you remember me",
+            "remember me",
+            "remember my name",
+            "know my name",
+            "know who i am",
+            "tell me my name",
+            "say my name",
+        ]
+        is_name_query = any(pat in q for pat in name_inquiry_patterns) or (
+            "my name" in q and any(w in q for w in ("what", "remember", "know", "recall", "tell", "forget"))
+        )
+        if is_name_query:
             name = self.slots.get("user_name")
             if name:
                 return f"Your name is {name}!"

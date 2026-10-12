@@ -29,8 +29,8 @@ class DatasetPipeline:
 
     def __init__(self, data_root: Optional[Path] = None):
         if data_root is None:
-            # Default to Project_Robbie/data
-            data_root = Path(__file__).resolve().parent.parent.parent.parent / "data"
+            from robbie.config import DATA_DIR
+            data_root = DATA_DIR
         self.data_root = Path(data_root)
         self.raw_dir = self.data_root / "raw"
         self.processed_dir = self.data_root / "processed"
@@ -124,10 +124,16 @@ class DatasetPipeline:
                 except Exception as e:
                     logger.warning(f"Error parsing dialogue line: {e}")
 
+        # Deterministically shuffle conversations so topics are balanced across splits
+        import random
+        rng = random.Random(42)
+        shuffled = list(conversations)
+        rng.shuffle(shuffled)
+
         # Split at conversation level (zero conversation leakage between train and val)
-        split_idx = max(1, int(len(conversations) * train_ratio))
-        train_convs = conversations[:split_idx]
-        val_convs = conversations[split_idx:] if split_idx < len(conversations) else conversations[-1:]
+        split_idx = max(1, int(len(shuffled) * train_ratio))
+        train_convs = shuffled[:split_idx]
+        val_convs = shuffled[split_idx:] if split_idx < len(shuffled) else shuffled[-1:]
 
         delimiter = f"\n\n{DOCUMENT_DELIMITER}\n\n"
         cleaned_train = delimiter.join([self.cleaner.clean(c) for c in train_convs])

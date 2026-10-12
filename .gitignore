@@ -41,6 +41,7 @@ htmlcov/
 data/raw/
 data/processed/
 data/cache/
+data/memory/
 checkpoints/
 *.pt
 *.pth

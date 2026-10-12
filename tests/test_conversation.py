@@ -111,6 +111,12 @@ class TestConversationContext:
         reply2 = ctx.check_direct_slot_answer("what is my name ?")
         assert reply2 == "Your name is Dharsh!"
 
+        # Flexible query variations
+        assert ctx.check_direct_slot_answer("do you remember what my name is ?") == "Your name is Dharsh!"
+        assert ctx.check_direct_slot_answer("do you remember my name") == "Your name is Dharsh!"
+        assert ctx.check_direct_slot_answer("who am i") == "Your name is Dharsh!"
+        assert ctx.check_direct_slot_answer("do you know my name?") == "Your name is Dharsh!"
+
     def test_session_save_and_load(self):
         tok = CharTokenizer()
         tok.train(["User: Robbie: testing persistence"])
@@ -158,6 +164,35 @@ class TestChatEngine:
         clear_out = engine.respond("/clear")
         assert "cleared" in clear_out.lower()
         assert engine.context.turn_count == 0
+
+    def test_self_introduction(self):
+        mock_model = MagicMock()
+        tok = CharTokenizer()
+        tok.train(["User: Robbie: My name is Dharsh"])
+        engine = ChatEngine(model=mock_model, tokenizer=tok, device=torch.device("cpu"))
+
+        reply = engine.respond("My name is Dharsh.")
+        assert "Nice to meet you, Dharsh!" in reply
+        assert engine.context.slots.get("user_name") == "Dharsh"
+
+    def test_stop_token_severing(self):
+        # Test model generating hallucinated next turns (e.g. \nRobbie: ...)
+        tok = CharTokenizer()
+        sample = "User: Robbie: Do you want to know my name?\nRobbie: Yes, of course! What's next?"
+        tok.train([sample])
+        mock_model = MagicMock()
+        # Mock generate returning token IDs corresponding to prompt + continuation
+        fake_tokens = tok.encode("Do you want to know my name?\nRobbie: Yes, of course! What's next?")
+        mock_model.generate.return_value = torch.tensor([[0] * 10 + fake_tokens])
+
+        engine = ChatEngine(model=mock_model, tokenizer=tok, device=torch.device("cpu"))
+        # Force prompt_ids length to 10
+        engine.context.get_context_prompt = MagicMock(return_value=("User: test\nRobbie:", [1] * 10))
+
+        reply = engine.respond("Can you tell me something?")
+        # The secondary turn "\nRobbie: Yes, of course! What's next?" must be severed
+        assert reply == "Do you want to know my name?"
+        assert "Yes, of course!" not in reply
 
 
 class TestConversationEvaluator:

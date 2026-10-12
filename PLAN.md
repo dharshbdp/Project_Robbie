@@ -96,11 +96,11 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 8 — Web Research
 **Version 1.0 — Research Assistant**
-- [ ] Web search
-- [ ] Webpage retrieval and text extraction
-- [ ] Multi-source comparison
-- [ ] Source-backed answers
-- [ ] Research summarization
+- [x] Web search (`UnifiedSearchEngine`, DuckDuckGo HTML, Wikipedia API)
+- [x] Webpage retrieval and text extraction (`WebpageScraper`, `HTMLContentExtractor`)
+- [x] Multi-source comparison (`ResearchSynthesizer` with query tokenization and sentence relevance scoring)
+- [x] Source-backed answers (Citations `[1]`, `[2]`, grounded URLs)
+- [x] Research summarization (`ResearchAssistant`, `/research`, `/search`, `--research <topic>`)
 
 ### Phase 9 — Computer Awareness
 **Version 1.1 — Computer Awareness**

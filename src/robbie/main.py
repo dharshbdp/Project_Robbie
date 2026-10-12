@@ -226,6 +226,12 @@ def parse_args():
         default=1.25,
         help="Penalty for previously generated tokens to prevent repetition loops (default: 1.25)",
     )
+    parser.add_argument(
+        "--research",
+        type=str,
+        default=None,
+        help="Execute automated multi-source web research with grounded citations (Phase 8)",
+    )
     return parser.parse_args()
 
 def run_tokenizer_demo():
@@ -898,7 +904,7 @@ def run_chat(
     user_name = memory.get("user_name")
     if user_name:
         console.print(f"[dim]Welcome back, [bold cyan]{user_name}[/]![/]")
-    console.print("[dim]Commands: /history, /memory, /clear, /help, exit/quit[/]\n")
+    console.print("[dim]Commands: /history, /memory, /research, /search, /clear, /help, exit/quit[/]\n")
 
     while True:
         try:
@@ -1023,6 +1029,23 @@ def run_eval_conversation(checkpoint: Optional[str] = None):
     console.print(f"Distinct-2 N-gram Diversity: [bold cyan]{speed['distinct_2'] * 100:.1f}%[/]\n")
     console.print("=" * 65 + "\n")
 
+def run_research(query: str):
+    """Run automated multi-source web research and generate grounded report (Phase 8)."""
+    from rich.panel import Panel
+    from robbie.research import ResearchAssistant
+
+    console = Console()
+    console.print("\n" + "=" * 65)
+    console.print("       PROJECT ROBBIE — RESEARCH ASSISTANT (PHASE 8)")
+    console.print("=" * 65 + "\n")
+
+    ra = ResearchAssistant()
+    with console.status(f"[bold cyan]Researching topic:[/] '{query}'..."):
+        report = ra.research(query, max_sources=4)
+
+    console.print(Panel(report.to_markdown(), title="[bold green]Research Report[/]", border_style="cyan"))
+
+
 def main():
     args = parse_args()
     logger.info(f"Starting Project Robbie (v{__version__})")
@@ -1142,6 +1165,9 @@ def main():
             repetition_penalty=args.repetition_penalty,
             seed=args.seed,
         )
+
+    if args.research is not None:
+        run_research(args.research)
 
 if __name__ == "__main__":
     main()
