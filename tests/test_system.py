@@ -174,14 +174,24 @@ def test_chat_engine_natural_language_system_queries():
     assert "GB free" in resp_ram
     assert "RAM" in resp_ram
 
-    # Battery query
-    resp_bat = engine.respond("What is my battery level?")
+    # Battery query with contraction
+    resp_bat = engine.respond("what's my battery level ?")
     assert "battery" in resp_bat.lower() or "power" in resp_bat.lower()
 
-    # GPU query
-    resp_gpu = engine.respond("What GPU do I have?")
-    assert "NVIDIA" in resp_gpu or "CPU" in resp_gpu
+    # Disk space query
+    resp_disk = engine.respond("How much disk space do I have ?")
+    assert "storage status" in resp_disk.lower() or "free" in resp_disk.lower()
 
-    # Active window query
+    # Process query with typo
+    resp_proc = engine.respond("what processess are running ?")
+    assert "top active processes" in resp_proc.lower()
+
+    # Active window and tab queries
     resp_win = engine.respond("What window is active?")
     assert "active foreground window" in resp_win
+
+    resp_tabs = engine.respond("What tabs are open in my system ?")
+    assert "active foreground window" in resp_tabs
+
+    resp_cur_win = engine.respond("What window is currently open ?")
+    assert "active foreground window" in resp_cur_win

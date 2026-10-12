@@ -1,5 +1,6 @@
 """ChatEngine orchestrating multi-turn conversation and model generation."""
 
+import re
 from typing import Any, Dict, Optional, Tuple
 import torch
 
@@ -215,32 +216,38 @@ class ChatEngine:
             self.context.add_assistant_message(reply)
             return reply
 
-        # Check for direct natural language research triggers
-        if lower_cleaned.startswith("research ") or lower_cleaned.startswith("research on "):
-            topic = cleaned[8:].strip()
-            if topic.lower().startswith("on "):
-                topic = topic[3:].strip()
-            if topic:
-                self.context.add_user_message(cleaned)
-                from robbie.research import ResearchAssistant
-                ra = ResearchAssistant()
-                report = ra.research(topic, max_sources=4)
-                report_md = report.to_markdown()
-                self.context.add_assistant_message(report_md)
-                return report_md
+        # Normalize query and expand common contractions / spelling variations
+        norm_query = lower_cleaned.rstrip("?.! ").strip()
+        norm_expanded = (
+            norm_query
+            .replace("what's", "what is")
+            .replace("whats", "what is")
+            .replace("how's", "how is")
+            .replace("hows", "how is")
+            .replace("who's", "who is")
+            .replace("whos", "who is")
+            .replace("processess", "processes")
+        )
 
-        if lower_cleaned.startswith("search the web for ") or lower_cleaned.startswith("search for "):
-            query_text = cleaned.split("for ", 1)[-1].strip()
-            if query_text:
-                self.context.add_user_message(cleaned)
-                from robbie.research import ResearchAssistant
-                ra = ResearchAssistant()
-                report = ra.research(query_text, max_sources=4)
-                report_md = report.to_markdown()
-                self.context.add_assistant_message(report_md)
-                return report_md
+        # Flexible natural language research triggers (Phase 8)
+        research_patterns = [
+            r"^(?:please\s+|can\s+you\s+)?(?:do\s+(?:a\s+)?)?research\s+(?:on\s+|about\s+)?(.+)$",
+            r"^(?:search\s+(?:the\s+web\s+)?for|look\s+up)\s+(.+)$",
+        ]
+        for pat in research_patterns:
+            m = re.match(pat, norm_expanded, re.IGNORECASE)
+            if m:
+                topic = m.group(1).strip()
+                if topic:
+                    self.context.add_user_message(cleaned)
+                    from robbie.research import ResearchAssistant
+                    ra = ResearchAssistant()
+                    report = ra.research(topic, max_sources=4)
+                    report_md = report.to_markdown()
+                    self.context.add_assistant_message(report_md)
+                    return report_md
 
-        # Check for natural language computer awareness capability questions (Phase 9)
+        # Computer awareness capability questions (Phase 9)
         awareness_capability_triggers = (
             "can you monitor my system",
             "can you check my computer",
@@ -251,7 +258,7 @@ class ChatEngine:
             "can you check my hardware",
             "what can you see about my computer",
         )
-        if any(trig in lower_cleaned for trig in awareness_capability_triggers):
+        if any(trig in norm_expanded for trig in awareness_capability_triggers):
             reply = (
                 "Yes! I have built-in computer awareness. I can monitor CPU, RAM, GPU, storage, "
                 "battery, running processes, active window, and development workspace status.\n"
@@ -262,70 +269,19 @@ class ChatEngine:
             self.context.add_assistant_message(reply)
             return reply
 
-        # Natural language system awareness triggers
-        norm_query = lower_cleaned.rstrip("?.! ")
-
-        system_triggers = (
-            "what are my computer specs",
-            "what are my pc specs",
-            "tell me my computer specs",
-            "what are your system specs",
-            "system specs",
-            "computer specs",
-            "hardware specs",
-            "check my computer",
-            "check my system",
-            "system status",
-            "computer status",
-            "system info",
-            "computer info",
-            "how is my computer doing",
-            "what is my system status",
-            "system report",
-            "computer report",
-        )
-        if norm_query in system_triggers or any(norm_query.startswith(t) for t in ("what are my specs", "check my specs", "what are my hardware")):
+        # Storage / Disk queries (e.g. "How much disk space do I have?")
+        if any(w in norm_expanded for w in ("disk", "storage", "drive space", "hard drive", "free space")):
             from robbie.system import ComputerAwareness
             ca = ComputerAwareness()
-            reply = ca.snapshot().to_markdown()
+            disks = ca.hardware.get_disks_info()
+            disk_strs = [f"{d.drive} ({d.free_gb:.1f} GB free out of {d.total_gb:.1f} GB)" for d in disks]
+            reply = f"Your storage status across drives: {', '.join(disk_strs)}."
             self.context.add_user_message(cleaned)
             self.context.add_assistant_message(reply)
             return reply
 
-        ram_triggers = (
-            "how much ram is free",
-            "how much ram do i have",
-            "how much ram is available",
-            "how much ram",
-            "how much memory is free",
-            "how much memory do i have",
-            "how much memory is available",
-            "check ram",
-            "ram usage",
-            "memory usage",
-            "ram status",
-            "what is my ram usage",
-        )
-        if any(t in norm_query for t in ram_triggers):
-            from robbie.system import ComputerAwareness
-            ca = ComputerAwareness()
-            mem = ca.hardware.get_memory_info()
-            reply = f"You have {mem.available_gb} GB free out of {mem.total_gb} GB total RAM ({mem.percent_used}% used)."
-            self.context.add_user_message(cleaned)
-            self.context.add_assistant_message(reply)
-            return reply
-
-        battery_triggers = (
-            "what is my battery level",
-            "battery status",
-            "how much battery do i have",
-            "battery percentage",
-            "is my laptop charging",
-            "check battery",
-            "how much battery",
-            "battery percent",
-        )
-        if any(t in norm_query for t in battery_triggers):
+        # Battery / Power queries (e.g. "what's my battery level?")
+        if any(w in norm_expanded for w in ("battery", "charging", "power source")):
             from robbie.system import ComputerAwareness
             ca = ComputerAwareness()
             bat = ca.env_monitor.get_battery_info()
@@ -333,23 +289,46 @@ class ChatEngine:
                 charging_tag = "charging" if bat.is_charging else "discharging"
                 reply = f"Your battery is at {bat.percent}% ({bat.power_source}, {charging_tag})."
             else:
-                reply = f"System is currently running on {bat.power_source}."
+                reply = f"System is currently running on {bat.power_source} (no battery detected)."
             self.context.add_user_message(cleaned)
             self.context.add_assistant_message(reply)
             return reply
 
-        gpu_triggers = (
-            "what gpu do i have",
-            "what graphics card do i have",
-            "check gpu",
-            "gpu specs",
-            "gpu usage",
-            "vram usage",
-            "how much vram",
-            "what is my gpu",
-            "what is my graphics card",
-        )
-        if any(t in norm_query for t in gpu_triggers):
+        # Process queries (e.g. "what processess are running?", "top processes")
+        if any(w in norm_expanded for w in ("process", "processes", "running tasks", "tasklist", "top tasks")):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            procs = ca.process_monitor.list_processes(limit=5)
+            lines = ["Here are the top active processes by memory usage:"]
+            for i, p in enumerate(procs, 1):
+                lines.append(f"  {i}. {p.name} (PID {p.pid}): {p.memory_mb:.1f} MB RAM")
+            reply = "\n".join(lines)
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        # Window / Tabs queries (e.g. "What tabs are open in my system?", "What window is currently open?")
+        if any(w in norm_expanded for w in ("window", "tabs", "active app", "foreground app", "foreground window")):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            win = ca.env_monitor.get_active_window()
+            reply = f"Your active foreground window is '{win.title}'."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        # RAM / Memory queries (e.g. "How much RAM is free?")
+        if "ram" in norm_expanded or ("memory" in norm_expanded and "process" not in norm_expanded):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            mem = ca.hardware.get_memory_info()
+            reply = f"You have {mem.available_gb:.2f} GB free out of {mem.total_gb:.2f} GB total RAM ({mem.percent_used:.1f}% used)."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        # GPU queries (e.g. "What GPU do I have?")
+        if "gpu" in norm_expanded or "graphics card" in norm_expanded or "vram" in norm_expanded:
             from robbie.system import ComputerAwareness
             ca = ComputerAwareness()
             gpu = ca.hardware.get_gpu_info()
@@ -361,37 +340,44 @@ class ChatEngine:
             self.context.add_assistant_message(reply)
             return reply
 
-        proc_triggers = (
-            "what process is using the most memory",
-            "top processes",
-            "what processes are running",
-            "running processes",
-            "check processes",
-            "top memory processes",
-        )
-        if any(t in norm_query for t in proc_triggers):
+        # CPU queries (e.g. "What CPU do I have?")
+        if "cpu" in norm_expanded or "processor" in norm_expanded:
             from robbie.system import ComputerAwareness
             ca = ComputerAwareness()
-            procs = ca.process_monitor.list_processes(limit=5)
-            lines = ["Here are the top processes by memory usage:"]
-            for i, p in enumerate(procs, 1):
-                lines.append(f"  {i}. {p.name} (PID {p.pid}): {p.memory_mb:.1f} MB RAM")
-            reply = "\n".join(lines)
+            cpu = ca.hardware.get_cpu_info()
+            reply = f"Your system has an {cpu.processor} with {cpu.logical_cores} logical cores running on {cpu.system} ({cpu.architecture})."
             self.context.add_user_message(cleaned)
             self.context.add_assistant_message(reply)
             return reply
 
-        window_triggers = (
-            "what window is active",
-            "what is my active window",
-            "current window",
-            "active window",
-        )
-        if any(t in norm_query for t in window_triggers):
+        # Git / Workspace queries
+        if any(w in norm_expanded for w in ("git branch", "git status", "git repo", "workspace status", "project status")):
             from robbie.system import ComputerAwareness
             ca = ComputerAwareness()
-            win = ca.env_monitor.get_active_window()
-            reply = f"Your active foreground window is '{win.title}'."
+            ws = ca.workspace_monitor.get_workspace_context()
+            clean_str = "clean" if ws.is_git_clean else f"{ws.modified_files_count} modified files"
+            reply = f"You are working on '{ws.project_name}' on git branch '{ws.git_branch or 'main'}' ({ws.git_commit or 'unknown'}, {clean_str})."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        # Network queries
+        if any(w in norm_expanded for w in ("network status", "internet status", "wifi status", "ip address", "ping latency")):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            net = ca.env_monitor.get_network_info()
+            net_tag = "online" if net.internet_connected else "offline"
+            lat_str = f" with {net.latency_ms:.1f}ms latency" if net.latency_ms else ""
+            reply = f"Network is {net_tag}{lat_str} on hostname '{net.hostname}' (Local IP: {net.local_ip})."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        # General System Specs / Computer Report
+        if any(w in norm_expanded for w in ("specs", "hardware", "system report", "system status", "computer report", "computer status", "system info", "computer info", "check my computer", "check my system", "monitor my system")):
+            from robbie.system import ComputerAwareness
+            ca = ComputerAwareness()
+            reply = ca.snapshot().to_markdown()
             self.context.add_user_message(cleaned)
             self.context.add_assistant_message(reply)
             return reply
