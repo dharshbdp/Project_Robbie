@@ -80,19 +80,19 @@ This document serves as the master roadmap and execution plan for Project Robbie
 
 ### Phase 6 — Character & Personality
 **Version 0.8 — Character**
-- [ ] Robbie's identity and personality
-- [ ] Consistent speaking style
-- [ ] Humor and conversational behavior
-- [ ] Character-specific training examples
-- [ ] Behavioral guidelines
+- [x] Robbie's identity and personality (`RobbiePersonality`, developer companion persona)
+- [x] Consistent speaking style (Affirmation & compliment handlers for 'Nice', 'Excellent', 'Cool')
+- [x] Humor and conversational behavior (Banter handlers, personalized greetings)
+- [x] Character-specific training examples (Expanded Stage 2 dataset with 196 curated dialogues)
+- [x] Behavioral guidelines (Helpful, humble, enthusiastic coding partner)
 
 ### Phase 7 — Persistent Memory
 **Version 0.9 — Memory**
-- [ ] Short-term conversational context
-- [ ] Long-term persistent memory
-- [ ] Memory retrieval and relevance ranking
-- [ ] Project and preference storage
-- [ ] User-controlled memory inspection and deletion
+- [x] Short-term conversational context (`ConversationContext` with sliding window)
+- [x] Long-term persistent memory (`PersistentMemory` disk storage in `data/memory/`)
+- [x] Memory retrieval and relevance ranking (`search_notes`, direct slot retrieval)
+- [x] Project and preference storage (User profile, name retention across restarts, notes)
+- [x] User-controlled memory inspection and deletion (`/memory [list|set|del|clear]`)
 
 ### Phase 8 — Web Research
 **Version 1.0 — Research Assistant**

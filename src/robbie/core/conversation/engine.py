@@ -5,6 +5,7 @@ import torch
 
 from robbie.core.conversation.context import ConversationContext
 from robbie.core.conversation.messages import Role
+from robbie.core.conversation.personality import RobbiePersonality
 
 
 class ChatEngine:
@@ -38,25 +39,55 @@ class ChatEngine:
 
     def handle_command(self, cmd: str) -> Optional[str]:
         """Process special in-chat slash commands."""
-        c = cmd.strip().lower()
+        parts = cmd.strip().split()
+        if not parts:
+            return None
+        c = parts[0].lower()
+
         if c == "/clear":
             self.context.clear()
             return "Conversation history cleared! Let's start fresh."
+
         if c == "/memory":
-            if not self.context.slots:
-                return "Working memory is currently empty."
-            items = ", ".join(f"{k}='{v}'" for k, v in self.context.slots.items())
-            return f"Remembered facts: {items}"
+            if len(parts) == 1 or parts[1].lower() == "list":
+                if not self.context.slots:
+                    return "Working memory is currently empty."
+                items = "\n".join(f"  • {k} = '{v}'" for k, v in self.context.slots.items())
+                return f"Remembered facts:\n{items}"
+            if parts[1].lower() == "set" and len(parts) >= 4:
+                k = parts[2]
+                v = " ".join(parts[3:])
+                self.context.slots[k] = v
+                if self.context.persistent_memory is not None:
+                    self.context.persistent_memory.set(k, v)
+                return f"Saved to memory: {k} = '{v}'"
+            if parts[1].lower() == "del" and len(parts) >= 3:
+                k = parts[2]
+                if k in self.context.slots:
+                    del self.context.slots[k]
+                    if self.context.persistent_memory is not None:
+                        self.context.persistent_memory.delete(k)
+                    return f"Deleted from memory: '{k}'"
+                return f"Fact '{k}' was not found in memory."
+            if parts[1].lower() == "clear":
+                self.context.slots.clear()
+                if self.context.persistent_memory is not None:
+                    self.context.persistent_memory.clear()
+                return "All memory attributes cleared!"
+            return "Usage: /memory [list | set <key> <val> | del <key> | clear]"
+
         if c == "/history":
             if not self.context.messages:
                 return "No messages in history yet."
             history_lines = [f"[{m.role.value}] {m.content}" for m in self.context.messages]
             return "\n".join(history_lines)
+
         if c == "/help":
             return (
                 "Available commands:\n"
                 "  /clear    — Clear current conversation history\n"
                 "  /memory   — Inspect remembered facts (like your name)\n"
+                "  /memory set <k> <v> — Store a custom fact in memory\n"
                 "  /history  — View all conversation turns\n"
                 "  exit/quit — End chat session"
             )
@@ -73,12 +104,28 @@ class ChatEngine:
         if cmd_result is not None:
             return cmd_result
 
+        user_name = self.context.slots.get("user_name")
+
+        # Check for character affirmations & compliments (Phase 6)
+        affirmation_reply = RobbiePersonality.get_affirmation_response(cleaned, user_name=user_name)
+        if affirmation_reply is not None:
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(affirmation_reply)
+            return affirmation_reply
+
         # Check for direct slot retrieval (e.g. 'what is my name?')
         slot_answer = self.context.check_direct_slot_answer(cleaned)
         if slot_answer is not None:
             self.context.add_user_message(cleaned)
             self.context.add_assistant_message(slot_answer)
             return slot_answer
+
+        # If user gives a warm direct greeting and name is already known, personalize greeting
+        if cleaned.lower() in ("hello", "hi", "hey", "hello robbie", "hey robbie") and user_name:
+            greeting_reply = RobbiePersonality.get_personalized_greeting(user_name)
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(greeting_reply)
+            return greeting_reply
 
         # Add user turn to context
         self.context.add_user_message(cleaned)

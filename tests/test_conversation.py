@@ -172,3 +172,62 @@ class TestConversationEvaluator:
 
         assert dist1_rep < 0.3
         assert dist1_div == 1.0
+
+
+class TestPersistentMemory:
+    """Test persistent memory storage on disk."""
+
+    def test_profile_and_notes_persistence(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp_dir:
+            store_file = Path(tmp_dir) / "test_memory.json"
+            from robbie.memory.store import PersistentMemory
+
+            mem = PersistentMemory(store_path=store_file)
+            mem.set("user_name", "Dharsh")
+            mem.set("favorite_language", "Python")
+            mem.add_note("Project", "Project Robbie LLM development")
+
+            assert store_file.exists()
+
+            # Load new instance from file
+            mem2 = PersistentMemory(store_path=store_file)
+            assert mem2.get("user_name") == "Dharsh"
+            assert mem2.get("favorite_language") == "Python"
+            assert mem2.get_note("Project") == "Project Robbie LLM development"
+
+            # Search notes
+            results = mem2.search_notes("Robbie")
+            assert len(results) > 0
+            assert results[0][0] == "Project"
+
+            # Delete and clear
+            mem2.delete("favorite_language")
+            assert mem2.get("favorite_language") is None
+            mem2.clear()
+            assert mem2.get("user_name") is None
+
+
+class TestRobbiePersonality:
+    """Test character personality and affirmation handling."""
+
+    def test_affirmation_reactions(self):
+        from robbie.core.conversation.personality import RobbiePersonality
+
+        reply_nice = RobbiePersonality.get_affirmation_response("nice", user_name="Dharsh")
+        assert reply_nice is not None
+
+        reply_excellent = RobbiePersonality.get_affirmation_response("Excellent!")
+        assert reply_excellent is not None
+
+        reply_cool = RobbiePersonality.get_affirmation_response("that's cool")
+        assert reply_cool is not None
+
+        # Non-affirmations should return None
+        assert RobbiePersonality.get_affirmation_response("How do I reverse a string?") is None
+
+    def test_personalized_greeting(self):
+        from robbie.core.conversation.personality import RobbiePersonality
+
+        greeting = RobbiePersonality.get_personalized_greeting(user_name="Dharsh")
+        assert "Dharsh" in greeting
+

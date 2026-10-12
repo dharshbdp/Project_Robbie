@@ -23,13 +23,18 @@ class ConversationContext:
         max_context_tokens: int = 128,
         reserved_generation_tokens: int = 40,
         formatter: Optional[ConversationFormatter] = None,
+        persistent_memory: Optional[Any] = None,
     ):
         self.tokenizer = tokenizer
         self.max_context_tokens = max_context_tokens
         self.reserved_generation_tokens = reserved_generation_tokens
         self.formatter = formatter or ConversationFormatter()
+        self.persistent_memory = persistent_memory
         self.messages: List[Message] = []
         self.slots: Dict[str, Any] = {}
+
+        if self.persistent_memory is not None:
+            self.slots.update(self.persistent_memory.list_profile())
 
     @property
     def max_prompt_budget(self) -> int:
@@ -57,6 +62,9 @@ class ConversationContext:
 
         new_slots = self.extract_slots(cleaned)
         self.slots.update(new_slots)
+        if self.persistent_memory is not None and new_slots:
+            for k, v in new_slots.items():
+                self.persistent_memory.set(k, v)
         return msg
 
     def add_assistant_message(self, content: str) -> Message:
@@ -95,6 +103,8 @@ class ConversationContext:
         self.messages.clear()
         if not keep_slots:
             self.slots.clear()
+            if self.persistent_memory is not None:
+                self.persistent_memory.clear()
 
     @property
     def turn_count(self) -> int:

@@ -874,18 +874,31 @@ def run_chat(
     model.to(device)
     model.eval()
 
-    console.print(f"[dim]Loaded model: {selected_ckpt.name} on {str(device).upper()}[/]")
-    console.print("[dim]Commands: /history, /memory, /clear, /help, exit/quit[/]\n")
+    from robbie.memory import PersistentMemory
 
+    memory = PersistentMemory()
+    context = ConversationContext(
+        tokenizer=tokenizer,
+        max_context_tokens=block_size,
+        reserved_generation_tokens=max_tokens,
+        persistent_memory=memory,
+    )
     engine = ChatEngine(
         model=model,
         tokenizer=tokenizer,
         device=device,
+        context=context,
         max_tokens=max_tokens,
         temperature=temperature,
         top_k=25,
         repetition_penalty=repetition_penalty,
     )
+
+    console.print(f"[dim]Loaded model: {selected_ckpt.name} on {str(device).upper()}[/]")
+    user_name = memory.get("user_name")
+    if user_name:
+        console.print(f"[dim]Welcome back, [bold cyan]{user_name}[/]![/]")
+    console.print("[dim]Commands: /history, /memory, /clear, /help, exit/quit[/]\n")
 
     while True:
         try:
