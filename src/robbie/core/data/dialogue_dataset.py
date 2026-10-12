@@ -261,6 +261,58 @@ def get_expanded_stage2_dialogues() -> List[Dict[str, Any]]:
     # 3. MACHINE LEARNING & TRANSFORMER CONCEPTS (60+ pairs)
     # =========================================================================
     add_pair(
+        "What is a neural network?",
+        "A neural network is a computational model inspired by biological brain circuits, composed of layers of interconnected artificial neurons with learnable weights and biases. It processes inputs through mathematical linear transformations and non-linear activations to discover complex patterns."
+    )
+    add_pair(
+        "What is a neural network ?",
+        "A neural network is a machine learning system composed of layers of artificial neurons. It learns representations by adjusting connection weights via gradient descent."
+    )
+    add_pair(
+        "What are neural networks?",
+        "Neural networks are machine learning architectures composed of interconnected nodes (neurons) organized in layers. They map inputs to outputs through weighted connections, non-linear activation functions, and backpropagation."
+    )
+    add_pair(
+        "What are neural networks ?",
+        "Neural networks are machine learning systems inspired by the brain. They consist of input, hidden, and output layers of artificial neurons that learn features and representations from data."
+    )
+    add_pair(
+        "what are neural networks",
+        "Neural networks are machine learning models composed of interconnected layers of neurons that learn complex patterns from data using weights and activation functions."
+    )
+    add_pair(
+        "what are neural networks ?",
+        "Neural networks are layered computational models of interconnected artificial neurons that learn patterns from data through training."
+    )
+    add_pair(
+        "What is deep learning?",
+        "Deep learning is a subset of machine learning based on artificial neural networks with multiple hidden layers. It automatically extracts hierarchical representations from raw data without manual feature engineering."
+    )
+    add_pair(
+        "What is deep learning ?",
+        "Deep learning is a branch of machine learning utilizing multi-layer neural networks to learn representations from vast datasets."
+    )
+    add_pair(
+        "what is deep learning",
+        "Deep learning uses deep neural networks with multiple layers to learn complex patterns and representations from data."
+    )
+    add_pair(
+        "How many datasets do you currently have?",
+        "I was trained across a two-stage curriculum: Stage 1 pretraining on extensive encyclopedic articles and literature, followed by Stage 2 instruction fine-tuning on hundreds of curated Python, machine learning, and assistant dialogue datasets."
+    )
+    add_pair(
+        "How many datasets do you currently have ?",
+        "I was trained on a two-stage dataset curriculum: Stage 1 general pretraining corpus (WikiText, encyclopedia, narrative text) and Stage 2 multi-turn instruction dialogue datasets."
+    )
+    add_pair(
+        "how many datasets do you currently have",
+        "I was trained on a two-stage curriculum: Stage 1 pretraining on broad technical and encyclopedic texts, and Stage 2 instruction fine-tuning on hundreds of curated dialogue and coding datasets."
+    )
+    add_pair(
+        "What datasets were you trained on?",
+        "I was trained on a two-stage pipeline: Stage 1 base pretraining on general language and encyclopedia corpora, and Stage 2 conversational fine-tuning on curated technical instruction and dialogue datasets."
+    )
+    add_pair(
         "What is a transformer?",
         "A transformer is a deep neural network architecture introduced by Vaswani et al. in 2017. It replaces recurrent loops with self-attention mechanisms, allowing tokens across an entire sequence to interact simultaneously in parallel."
     )

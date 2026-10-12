@@ -170,6 +170,55 @@ class ChatEngine:
             self.context.add_assistant_message(greeting_reply)
             return greeting_reply
 
+        # Check for natural language research capability questions
+        research_capability_triggers = (
+            "can you research on the internet",
+            "can you research the internet",
+            "can you research online",
+            "can you search the web",
+            "can you search online",
+            "can you search the internet",
+            "can you browse the web",
+            "do you have internet access",
+            "can you look up things online",
+            "can you search for things",
+        )
+        if any(trig in lower_cleaned for trig in research_capability_triggers):
+            reply = (
+                "Yes! I have a built-in research assistant. I can search the web and Wikipedia, "
+                "read articles, and synthesize findings with citations.\n"
+                "You can ask me to research any topic by typing `/research <topic>` or `/search <query>`, "
+                "or simply say 'research <topic>'!"
+            )
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        # Check for direct natural language research triggers
+        if lower_cleaned.startswith("research ") or lower_cleaned.startswith("research on "):
+            topic = cleaned[8:].strip()
+            if topic.lower().startswith("on "):
+                topic = topic[3:].strip()
+            if topic:
+                self.context.add_user_message(cleaned)
+                from robbie.research import ResearchAssistant
+                ra = ResearchAssistant()
+                report = ra.research(topic, max_sources=4)
+                report_md = report.to_markdown()
+                self.context.add_assistant_message(report_md)
+                return report_md
+
+        if lower_cleaned.startswith("search the web for ") or lower_cleaned.startswith("search for "):
+            query_text = cleaned.split("for ", 1)[-1].strip()
+            if query_text:
+                self.context.add_user_message(cleaned)
+                from robbie.research import ResearchAssistant
+                ra = ResearchAssistant()
+                report = ra.research(query_text, max_sources=4)
+                report_md = report.to_markdown()
+                self.context.add_assistant_message(report_md)
+                return report_md
+
         # Add user turn to context
         self.context.add_user_message(cleaned)
 
@@ -211,6 +260,9 @@ class ChatEngine:
         for marker in stop_markers:
             if marker in response_text:
                 response_text = response_text.split(marker)[0].strip()
+
+        # Clean trailing incomplete boundary tokens or tags
+        response_text = response_text.rstrip("<\n ").strip()
 
         # Fallback if empty response generated
         if not response_text:
