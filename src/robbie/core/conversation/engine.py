@@ -417,6 +417,7 @@ class ChatEngine:
             "Robbie:",
             "Assistant:",
             "<|endoftext|>",
+            "<|endoftext",
             "<isendoftextis>",
             "<|im_end|>",
         ]
