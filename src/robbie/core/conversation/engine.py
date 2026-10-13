@@ -273,6 +273,72 @@ class ChatEngine:
                     self.context.add_assistant_message(report_md)
                     return report_md
 
+        # Application launching (e.g. "open Google Chrome", "open photos", "open file manager")
+        if any(norm_expanded.startswith(p) for p in ("open ", "launch ", "start ")):
+            from robbie.computer.launcher import AppLauncher
+            launch_res = AppLauncher.launch(norm_expanded)
+            if launch_res.success:
+                self.context.add_user_message(cleaned)
+                self.context.add_assistant_message(launch_res.message)
+                return launch_res.message
+
+        # Diagnostic: Why is game FPS dropping / stuttering?
+        if any(w in norm_expanded for w in ("fps drop", "fps dropping", "game lagging", "game lag", "frame drops", "stuttering", "game stutter", "fps low")):
+            from robbie.system.diagnostics import SystemDiagnostics
+            diag = SystemDiagnostics.diagnose_fps_drop()
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(diag.summary_markdown)
+            return diag.summary_markdown
+
+        # Diagnostic: Why is CPU usage high?
+        if ("why" in norm_expanded and "cpu" in norm_expanded) or "high cpu" in norm_expanded or "cpu pegged" in norm_expanded or "running slow" in norm_expanded:
+            from robbie.system.diagnostics import SystemDiagnostics
+            diag = SystemDiagnostics.diagnose_cpu()
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(diag.summary_markdown)
+            return diag.summary_markdown
+
+        # Diagnostic: Disk usage breakdown
+        if any(w in norm_expanded for w in ("disk usage", "drive usage", "storage usage", "disk space", "disk capacity")):
+            from robbie.system.diagnostics import SystemDiagnostics
+            diag = SystemDiagnostics.diagnose_disk()
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(diag.summary_markdown)
+            return diag.summary_markdown
+
+        # Safe Read-Only File Operations
+        if norm_expanded.startswith("read file ") or norm_expanded.startswith("check file ") or norm_expanded.startswith("view file "):
+            file_target = cleaned.split("file", 1)[1].strip()
+            from robbie.computer.tools.file_ops import FileOps
+            fops = FileOps()
+            fres = fops.read_file(file_target)
+            if fres.success:
+                reply = f"Contents of `{fres.path}`:\n```\n{fres.content[:3000]}\n```"
+            else:
+                reply = f"Could not read `{file_target}`: {fres.error}"
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        if any(w in norm_expanded for w in ("write file", "modify file", "delete file", "overwrite file")) or ("delete" in norm_expanded and "file" in norm_expanded) or ("write" in norm_expanded and "file" in norm_expanded) or ("modify" in norm_expanded and "file" in norm_expanded):
+            reply = "My computer tool safety policy enforces strict read-only access. I can inspect, read, and open files for you, but I cannot modify, write to, or delete any files. This ensures your data remains protected."
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
+        # Priorities query
+        if "priority" in norm_expanded or "priorities" in norm_expanded or "primary focus" in norm_expanded:
+            reply = (
+                "My priorities are strictly ordered:\n"
+                "1. **Computer Awareness & System Diagnostics** (my first and most important choice)\n"
+                "2. **Autonomous Web Research** (my second choice)\n"
+                "3. **Conversational Companion** (my third choice)\n"
+                "4. **Programming & Code** (optional auxiliary tool)"
+            )
+            self.context.add_user_message(cleaned)
+            self.context.add_assistant_message(reply)
+            return reply
+
         # Computer awareness capability questions (Phase 9)
         awareness_capability_triggers = (
             "can you monitor my system",
@@ -286,10 +352,10 @@ class ChatEngine:
         )
         if any(trig in norm_expanded for trig in awareness_capability_triggers):
             reply = (
-                "Yes! I have built-in computer awareness. I can monitor CPU, RAM, GPU, storage, "
-                "battery, running processes, active window, and development workspace status.\n"
-                "You can type `/system` for a full status report, `/processes` for top processes, "
-                "or simply ask me questions like 'How much RAM is free?' or 'What is my battery level?'!"
+                "Yes! I have built-in computer awareness, which is my first and highest priority. I can monitor CPU, RAM, GPU, storage, "
+                "battery, running processes, active window, and workspace status.\n"
+                "I can diagnose why your CPU is high, why your game's FPS is dropping, report current disk usage, "
+                "launch applications like Google Chrome or File Explorer, and read workspace files safely."
             )
             self.context.add_user_message(cleaned)
             self.context.add_assistant_message(reply)

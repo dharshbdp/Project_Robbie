@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Robbie Studio — Intelligent AI Companion & Engineering Workspace</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="/main.js" defer></script>
+  </head>
+
+  <body>
+    <div class="app-shell">
+      <!-- ================================================================== -->
+      <!-- 1. Persistent Left Navigation Sidebar                              -->
+      <!-- ================================================================== -->
+      <aside class="sidebar" id="app-sidebar">
+        <!-- Sidebar Brand Header -->
+        <div class="sidebar-header">
+          <div class="brand-badge" id="nav-brand-btn" title="Robbie Studio Home">
+            <div class="brand-icon">R</div>
+            <span class="brand-name">Robbie Studio</span>
+          </div>
+          <button class="btn-sidebar-toggle" id="btn-sidebar-toggle" title="Toggle Sidebar">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+        </div>
+
+        <!-- Primary Workspace Destinations -->
+        <nav class="sidebar-nav">
+          <button class="nav-item active" data-view="chat" title="Robbie Chat Workspace">
+            <span class="nav-item-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span class="nav-item-label">Chat</span>
+            <span class="nav-item-badge">25M</span>
+          </button>
+
+          <button class="nav-item" data-view="research" title="Autonomous Web Research Workspace">
+            <span class="nav-item-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            </span>
+            <span class="nav-item-label">Research</span>
+          </button>
+
+          <button class="nav-item" data-view="computer" title="Computer Awareness & System Diagnostics">
+            <span class="nav-item-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+            </span>
+            <span class="nav-item-label">Computer</span>
+          </button>
+
+          <button class="nav-item" data-view="workspace" title="Developer Code Workspace">
+            <span class="nav-item-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </span>
+            <span class="nav-item-label">Workspace</span>
+          </button>
+
+          <button class="nav-item" data-view="memory" title="Persistent Memory Manager">
+            <span class="nav-item-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 0-10 10c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.1-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg>
+            </span>
+            <span class="nav-item-label">Memory</span>
+          </button>
+        </nav>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+          <button class="nav-item" data-view="settings" title="Settings & Preferences">
+            <span class="nav-item-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </span>
+            <span class="nav-item-label">Settings</span>
+          </button>
+
+          <div class="sidebar-model-status" title="Local Robbie-25M Neural Model Active">
+            <span class="status-dot-pulse"></span>
+            <span class="sidebar-model-text" id="sidebar-model-label">Robbie-25M Online</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ================================================================== -->
+      <!-- 2. Main Application Workspace Shell                                -->
+      <!-- ================================================================== -->
+      <div class="main-wrapper">
+        <!-- Contextual Top Header (Adapts controls per view) -->
+        <header class="top-header" id="app-top-header">
+          <div class="header-left">
+            <div class="view-breadcrumb">
+              <span class="crumb-root">Robbie Studio</span>
+              <span class="crumb-sep">/</span>
+              <span class="crumb-current" id="header-view-title">Chat</span>
+            </div>
+            <div class="header-context-badge" id="header-context-badge">
+              <span class="badge badge-accent" id="header-badge-text">Robbie-25M Model</span>
+            </div>
+          </div>
+
+          <!-- Contextual Controls for Active View -->
+          <div class="header-right" id="header-actions-area">
+            <!-- Dynamic Controls Injected by View Controller -->
+            <div class="header-custom-controls" id="header-custom-controls"></div>
+
+            <!-- Global Theme Toggle Button -->
+            <button class="btn-icon" id="btn-theme-toggle" title="Toggle Dark / Light Theme">
+              <svg id="theme-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Dynamic Main Views Container -->
+        <main class="views-container">
+          <!-- ============================================================== -->
+          <!-- 3. Chat Workspace (The Core Experience of Robbie Studio)        -->
+          <!-- ============================================================== -->
+          <section class="view-pane active" id="view-chat">
+            <div class="chat-full-workspace">
+              <!-- Contextual History Slide-Over Drawer (Collapsible) -->
+              <aside class="chat-history-drawer" id="chat-history-drawer">
+                <div class="drawer-header">
+                  <div class="drawer-title">Conversations</div>
+                  <button class="btn-icon-xs" id="btn-close-history-drawer" title="Close Drawer">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <div class="drawer-actions">
+                  <button class="btn-primary-sm w-full" id="btn-drawer-new-chat">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>New Session</span>
+                  </button>
+                </div>
+                <div class="chat-sessions-list" id="chat-sessions-list">
+                  <div class="session-item active">
+                    <span class="session-dot"></span>
+                    <div class="session-info">
+                      <div class="session-title">Current Workspace Session</div>
+                      <div class="session-meta" id="session-turns-meta">0 turns • Active now</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="drawer-footer">
+                  <button class="btn-text-danger w-full" id="btn-clear-chat-history">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    <span>Clear Current Chat</span>
+                  </button>
+                </div>
+              </aside>
+
+              <!-- Central Conversation Column -->
+              <div class="chat-conversation-area">
+                <!-- Message Stream Scroll Container -->
+                <div class="chat-scroll-viewport" id="chat-scroll-viewport">
+                  <!-- Restrained Welcome Banner on Empty Conversation -->
+                  <div class="chat-welcome-state" id="chat-welcome-state">
+                    <div class="welcome-avatar-mark">R</div>
+                    <h2 class="welcome-heading">Robbie Studio</h2>
+                    <p class="welcome-lead">
+                      Local neural AI companion with live computer awareness, deep web research, and sandboxed code execution.
+                    </p>
+                    <div class="welcome-hints-row">
+                      <button class="hint-pill" data-hint="Why is my CPU or GPU usage high?">
+                        <span>⚡</span> Why is my CPU or GPU usage high?
+                      </button>
+                      <button class="hint-pill" data-hint="Research Transformer attention mechanisms">
+                        <span>🔍</span> Research Transformer attention mechanisms
+                      </button>
+                      <button class="hint-pill" data-hint="Why is my game's FPS dropping?">
+                        <span>🎮</span> Why is my game's FPS dropping?
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Feed where User & Assistant Messages Flow -->
+                  <div class="chat-messages-stream" id="chat-messages-stream"></div>
+                </div>
+
+                <!-- Persistent Multiline Composer Anchored at Bottom -->
+                <div class="chat-composer-anchor">
+                  <!-- Quick Tool Shortcuts Strip -->
+                  <div class="composer-tools-strip">
+                    <button class="composer-tool-tag" data-tool="diag" title="Ask diagnostic question">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                      <span>Diagnose</span>
+                    </button>
+                    <button class="composer-tool-tag" data-tool="research" title="Start deep research">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                      <span>Research</span>
+                    </button>
+                    <button class="composer-tool-tag" data-tool="code" title="Execute Python snippet">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                      <span>Code</span>
+                    </button>
+                    <button class="composer-tool-tag" data-tool="launch" title="Launch computer application">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                      <span>Launch</span>
+                    </button>
+                    <span class="composer-telemetry-tag" id="composer-telemetry-pill">
+                      CPU: <strong id="comp-inline-cpu">--%</strong> • RAM: <strong id="comp-inline-ram">-- GB</strong>
+                    </span>
+                  </div>
+
+                  <!-- Multiline Textarea Box -->
+                  <div class="composer-input-box" id="composer-input-box">
+                    <textarea
+                      id="chat-composer-textarea"
+                      class="composer-textarea"
+                      placeholder="Ask Robbie, diagnose computer issues, research a topic, or run code... (Shift+Enter for new line)"
+                      rows="1"
+                    ></textarea>
+                    <div class="composer-actions-right">
+                      <button class="btn-composer-send" id="btn-chat-send" title="Send message (Enter)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                      </button>
+                      <button class="btn-composer-stop" id="btn-chat-stop" title="Stop generating" style="display: none;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ============================================================== -->
+          <!-- 4. Research Workspace (Dedicated Research & Report View)        -->
+          <!-- ============================================================== -->
+          <section class="view-pane" id="view-research">
+            <div class="research-full-workspace">
+              <!-- Initial Search & Topics View -->
+              <div class="research-landing-view" id="research-landing-view">
+                <div class="research-hero-banner">
+                  <div class="research-hero-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                  </div>
+                  <h2 class="research-hero-title">Autonomous Web Research</h2>
+                  <p class="research-hero-sub">Multi-source web synthesis with verifiable citations and grounded findings.</p>
+                </div>
+
+                <!-- Compact Query Composer -->
+                <div class="research-search-panel">
+                  <div class="research-input-group">
+                    <input
+                      type="text"
+                      id="research-query-input"
+                      class="research-input"
+                      placeholder="Enter a research topic (e.g., GPU VRAM Latency, Transformer Attention, Quantum Algorithms)..."
+                      autocomplete="off"
+                    />
+                    <select id="research-sources-count" class="research-select" title="Maximum sources">
+                      <option value="3" selected>3 Sources</option>
+                      <option value="4">4 Sources</option>
+                      <option value="5">5 Sources</option>
+                    </select>
+                    <button class="btn-primary" id="btn-start-research">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                      <span>Research</span>
+                    </button>
+                  </div>
+
+                  <!-- Suggested Query Chips -->
+                  <div class="research-suggestions-row">
+                    <span class="suggestions-label">Explore:</span>
+                    <button class="chip-btn" data-topic="GPU VRAM Allocation and Gaming Frame Times">GPU VRAM & FPS</button>
+                    <button class="chip-btn" data-topic="Computer Awareness & Telemetry Architecture">Hardware Telemetry</button>
+                    <button class="chip-btn" data-topic="Transformer Self-Attention Mechanisms">Transformer Attention</button>
+                    <button class="chip-btn" data-topic="Python 3.12 GIL and Performance Upgrades">Python 3.12 GIL</button>
+                  </div>
+                </div>
+
+                <!-- Recent Research Shelf -->
+                <div class="research-shelf-section">
+                  <div class="shelf-header">
+                    <h3>Recent Research Reports</h3>
+                    <span class="badge badge-neutral" id="shelf-reports-count">0 Reports</span>
+                  </div>
+                  <div class="research-history-grid" id="research-history-grid">
+                    <div class="empty-shelf-message">
+                      No research reports conducted in this session yet. Enter a topic above to generate an evidence-based report.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Dedicated Active Report View (Toggled when a report is loaded) -->
+              <div class="research-report-view" id="research-report-view" style="display: none;">
+                <!-- Narrow Top Report Toolbar -->
+                <div class="report-toolbar">
+                  <div class="report-toolbar-left">
+                    <button class="btn-secondary-sm" id="btn-report-back">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                      <span>New Query</span>
+                    </button>
+                    <span class="report-title-label" id="report-view-topic">Topic Title</span>
+                    <span class="badge badge-success" id="report-badge-citations">100% Citations Verified</span>
+                    <span class="badge badge-neutral" id="report-badge-meta">3 sources • 4.2s</span>
+                  </div>
+                  <div class="report-toolbar-right">
+                    <button class="btn-secondary-sm" id="btn-report-copy-markdown" title="Copy report as markdown">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      <span>Copy Markdown</span>
+                    </button>
+                    <button class="btn-secondary-sm" id="btn-report-toggle-sources" title="Toggle sources panel">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      <span>Sources</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Research Progress Pipeline Banner (Visible while researching) -->
+                <div class="research-progress-bar" id="research-progress-bar" style="display: none;">
+                  <div class="progress-spinner"></div>
+                  <div class="progress-text" id="research-progress-text">1. Querying search index...</div>
+                </div>
+
+                <!-- 2-Column Split: Document Reading Area & Collapsible Sources Sidebar -->
+                <div class="report-content-split">
+                  <!-- Primary Document Reading Column (~70%) -->
+                  <div class="report-document-column" id="report-document-column">
+                    <article class="report-article" id="report-article-content"></article>
+                  </div>
+
+                  <!-- Contextual Sources Sidebar Panel (~30%) -->
+                  <aside class="report-sources-sidebar" id="report-sources-sidebar">
+                    <div class="sources-sidebar-header">
+                      <h4>Consulted Sources</h4>
+                      <span class="badge badge-neutral" id="report-sources-count-badge">0 Sources</span>
+                    </div>
+                    <div class="sources-list" id="report-sources-list"></div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ============================================================== -->
+          <!-- 5. Computer Workspace (Interactive Two-Column Architecture)    -->
+          <!-- ============================================================== -->
+          <section class="view-pane" id="view-computer">
+            <div class="computer-full-workspace">
+              <!-- Top Sub-Workspace Switcher Bar -->
+              <div class="computer-subnav-bar">
+                <div class="subnav-tabs">
+                  <button class="subnav-tab active" data-subtab="overview" id="btn-subtab-overview">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
+                    <span>System Overview & Diagnostics</span>
+                  </button>
+                  <button class="subnav-tab" data-subtab="files" id="btn-subtab-files">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span>File Explorer & Workspace</span>
+                  </button>
+                </div>
+                <div class="subnav-actions">
+                  <button class="btn-secondary-sm" id="btn-comp-refresh-telemetry" title="Refresh Live Hardware Snapshot">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>Refresh Telemetry</span>
+                  </button>
+                  <span class="telemetry-timestamp-pill" id="comp-timestamp-pill">Just now</span>
+                </div>
+              </div>
+
+              <!-- Sub-Workspace 1: System Overview & Diagnostics (Two Columns) -->
+              <div class="computer-subtab-content active" id="subtab-pane-overview">
+                <div class="computer-two-column-layout">
+                  <!-- Main Column: Hardware Resources & Diagnostics (~65%) -->
+                  <div class="comp-col-main">
+                    <!-- High-Density Hardware Resources Strip -->
+                    <div class="hardware-telemetry-strip">
+                      <!-- CPU Metric Row -->
+                      <div class="telemetry-row">
+                        <div class="telemetry-row-info">
+                          <span class="telemetry-label">Processor</span>
+                          <span class="telemetry-model" id="comp-cpu-processor">Intel64 Family 6 (12 Cores)</span>
+                        </div>
+                        <div class="telemetry-row-stat">
+                          <div class="meter-bar-track">
+                            <div class="meter-bar-fill" id="comp-cpu-bar-fill" style="width: 24%;"></div>
+                          </div>
+                          <span class="telemetry-pct" id="comp-cpu-pct">24%</span>
+                        </div>
+                      </div>
+
+                      <!-- Memory (RAM) Metric Row -->
+                      <div class="telemetry-row">
+                        <div class="telemetry-row-info">
+                          <span class="telemetry-label">Memory (RAM)</span>
+                          <span class="telemetry-model" id="comp-ram-detail">18.2 GB Free / 31.7 GB Total</span>
+                        </div>
+                        <div class="telemetry-row-stat">
+                          <div class="meter-bar-track">
+                            <div class="meter-bar-fill" id="comp-ram-bar-fill" style="width: 42%;"></div>
+                          </div>
+                          <span class="telemetry-pct" id="comp-ram-pct">42%</span>
+                        </div>
+                      </div>
+
+                      <!-- GPU & VRAM Metric Row -->
+                      <div class="telemetry-row">
+                        <div class="telemetry-row-info">
+                          <span class="telemetry-label">Graphics VRAM</span>
+                          <span class="telemetry-model" id="comp-gpu-detail">Quadro RTX 3000 (CUDA Active • 5.9 GB Free / 6.0 GB)</span>
+                        </div>
+                        <div class="telemetry-row-stat">
+                          <div class="meter-bar-track">
+                            <div class="meter-bar-fill" id="comp-gpu-bar-fill" style="width: 15%;"></div>
+                          </div>
+                          <span class="telemetry-pct" id="comp-gpu-pct">15%</span>
+                        </div>
+                      </div>
+
+                      <!-- Storage Partitions Row -->
+                      <div class="telemetry-row">
+                        <div class="telemetry-row-info">
+                          <span class="telemetry-label">Disks Storage</span>
+                          <span class="telemetry-model" id="comp-disk-detail">C: 50.6 GB free • Z: 170.8 GB free</span>
+                        </div>
+                        <div class="telemetry-row-stat">
+                          <div class="meter-bar-track">
+                            <div class="meter-bar-fill" id="comp-disk-bar-fill" style="width: 71%;"></div>
+                          </div>
+                          <span class="telemetry-pct" id="comp-disk-pct">71%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Intelligent Diagnostics Engine Section -->
+                    <div class="diagnostics-panel">
+                      <div class="panel-header-compact">
+                        <div class="panel-title-with-badge">
+                          <h3>Performance Diagnostics</h3>
+                          <span class="badge badge-accent">Root-Cause Analysis</span>
+                        </div>
+                        <div class="quick-diag-pills">
+                          <button class="pill-btn-xs" data-diag="cpu">CPU Load Check</button>
+                          <button class="pill-btn-xs" data-diag="fps">Game FPS & GPU</button>
+                          <button class="pill-btn-xs" data-diag="disk">Storage Capacity</button>
+                        </div>
+                      </div>
+
+                      <!-- Diagnostic Prompt Input Bar -->
+                      <div class="diag-search-bar">
+                        <input
+                          type="text"
+                          id="diag-freeform-input"
+                          class="diag-input"
+                          placeholder="Ask Robbie why your computer is slow, why game FPS dropped, or what is eating RAM..."
+                        />
+                        <button class="btn-primary" id="btn-run-diag">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                          <span>Diagnose</span>
+                        </button>
+                      </div>
+
+                      <!-- Structured Diagnostic Report Container -->
+                      <div class="diag-report-container" id="diag-report-container">
+                        <div class="diag-report-empty" id="diag-empty-placeholder">
+                          <p>Click a quick diagnostic above or type a specific performance question to analyze system bottlenecks.</p>
+                        </div>
+
+                        <div class="diag-report-content" id="diag-active-report" style="display: none;">
+                          <div class="diag-report-header">
+                            <div>
+                              <h4 class="diag-headline" id="diag-report-headline">Diagnostic Headline</h4>
+                              <div class="diag-bottleneck-row">
+                                <span>Primary Bottleneck:</span>
+                                <span class="badge badge-warning" id="diag-bottleneck-badge">Nominal Load</span>
+                              </div>
+                            </div>
+                            <button class="btn-secondary-xs" id="btn-clear-diag">Clear</button>
+                          </div>
+
+                          <!-- Findings Checklist -->
+                          <div class="diag-findings-list" id="diag-findings-list"></div>
+
+                          <!-- Detailed Markdown Report -->
+                          <div class="diag-markdown-box" id="diag-markdown-box"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Secondary Column: Quick Tools & Live Processes (~35%) -->
+                  <div class="comp-col-secondary">
+                    <!-- Application Launcher Card -->
+                    <div class="tools-card">
+                      <div class="tools-card-header">
+                        <h4>Application Launcher</h4>
+                        <button class="btn-text-xs" id="btn-open-add-shortcut">+ Add App</button>
+                      </div>
+
+                      <div class="quick-launch-field">
+                        <input
+                          type="text"
+                          id="quick-launch-input"
+                          class="input-text-sm"
+                          placeholder="Type app name (e.g. chrome, photos, wt)..."
+                        />
+                        <button class="btn-primary-sm" id="btn-quick-launch">Launch</button>
+                      </div>
+
+                      <!-- Add Shortcut Drawer -->
+                      <div class="add-shortcut-drawer" id="add-shortcut-drawer" style="display: none;">
+                        <input type="text" id="new-sc-name" class="input-text-xs" placeholder="Display Name (e.g. VLC)" />
+                        <input type="text" id="new-sc-target" class="input-text-xs" placeholder="Executable (e.g. vlc.exe)" />
+                        <div class="drawer-actions-row">
+                          <button class="btn-secondary-xs" id="btn-cancel-add-shortcut">Cancel</button>
+                          <button class="btn-primary-xs" id="btn-save-new-shortcut">Save</button>
+                        </div>
+                      </div>
+
+                      <!-- Monochromatic Speed Dial Grid -->
+                      <div class="speed-dial-compact-grid" id="speed-dial-grid"></div>
+                    </div>
+
+                    <!-- Active Processes Monitor Card -->
+                    <div class="tools-card">
+                      <div class="tools-card-header">
+                        <h4>Top Active Processes</h4>
+                        <span class="badge badge-neutral" id="processes-count-badge">Top 5</span>
+                      </div>
+                      <div class="processes-list-wrap">
+                        <table class="processes-table">
+                          <thead>
+                            <tr>
+                              <th>PID</th>
+                              <th>Process Name</th>
+                              <th>RAM MB</th>
+                            </tr>
+                          </thead>
+                          <tbody id="processes-table-body">
+                            <tr><td colspan="3" class="table-loading">Loading telemetry...</td></tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sub-Workspace 2: File Explorer & Workspace Files (Separate Tab) -->
+              <div class="computer-subtab-content" id="subtab-pane-files" style="display: none;">
+                <div class="file-workspace-layout">
+                  <!-- File Explorer Path & Safety Bar -->
+                  <div class="explorer-toolbar">
+                    <div class="explorer-path-group">
+                      <button class="btn-secondary-sm" id="btn-file-up" title="Parent Directory">Up</button>
+                      <input type="text" id="explorer-path-input" class="explorer-path-input" value="." />
+                      <button class="btn-primary-sm" id="btn-file-browse">Browse</button>
+                      <button class="btn-secondary-sm" id="btn-file-refresh">Refresh</button>
+                    </div>
+                    <div class="explorer-safety-badge">
+                      <span class="badge badge-success">Read-Only Safety Enforced (Write/Delete Locked)</span>
+                    </div>
+                  </div>
+
+                  <!-- Two-Pane File Explorer: Listing & Inspector -->
+                  <div class="explorer-two-pane">
+                    <!-- Left: Directory Table -->
+                    <div class="explorer-table-pane">
+                      <table class="data-table">
+                        <thead>
+                          <tr>
+                            <th style="width: 50px;">Type</th>
+                            <th>Name</th>
+                            <th style="width: 80px;">Size</th>
+                            <th style="width: 120px;">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="explorer-table-body">
+                          <tr><td colspan="4" class="table-loading">Loading files...</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <!-- Right: File Viewer & Content Inspector -->
+                    <div class="explorer-viewer-pane" id="explorer-viewer-pane">
+                      <div class="viewer-header">
+                        <div>
+                          <strong id="preview-file-name">Select a file to inspect</strong>
+                          <span class="badge badge-neutral" id="preview-file-meta">Read-Only</span>
+                        </div>
+                        <div class="viewer-actions">
+                          <button class="btn-secondary-xs" id="btn-preview-open-system" style="display: none;">Open in Windows</button>
+                        </div>
+                      </div>
+                      <pre class="viewer-code-block" id="preview-file-content">Click 'Read' on any file on the left to inspect its contents in this safe read-only viewer.</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ============================================================== -->
+          <!-- 6. Developer Workspace (3-Region IDE Architecture)             -->
+          <!-- ============================================================== -->
+          <section class="view-pane" id="view-workspace">
+            <div class="developer-workspace-layout">
+              <!-- Region 1: Left Project Explorer (~20%) -->
+              <aside class="dev-project-explorer">
+                <div class="explorer-header">
+                  <span>Project Files</span>
+                  <span class="badge badge-neutral">Read-Only</span>
+                </div>
+                <div class="explorer-file-tree" id="workspace-file-tree">
+                  <div class="file-tree-item active" data-file="scratchpad.py" data-type="editable">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>scratchpad.py</span>
+                    <span class="file-tag-editable">scratch</span>
+                  </div>
+                  <div class="file-tree-item" data-file="src/robbie/system/diagnostics.py" data-type="readonly">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>diagnostics.py</span>
+                  </div>
+                  <div class="file-tree-item" data-file="src/robbie/computer/launcher.py" data-type="readonly">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>launcher.py</span>
+                  </div>
+                  <div class="file-tree-item" data-file="src/robbie/system/inspector.py" data-type="readonly">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>inspector.py</span>
+                  </div>
+                </div>
+              </aside>
+
+              <!-- Region 2: Center Code Editor Surface & Toolbar (~55%) -->
+              <div class="dev-editor-center">
+                <!-- Editor Top Bar with Tabs & Controls -->
+                <div class="dev-editor-header">
+                  <div class="dev-editor-tabs">
+                    <div class="editor-tab active" id="editor-active-tab">
+                      <span id="editor-active-tab-name">scratchpad.py</span>
+                    </div>
+                  </div>
+                  <div class="dev-editor-actions">
+                    <span class="badge badge-neutral" id="editor-sandbox-badge">Sandboxed Python</span>
+                    <button class="btn-primary-sm" id="btn-editor-run" title="Execute Code (Ctrl+Enter)">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      <span>Run (Ctrl+Enter)</span>
+                    </button>
+                    <button class="btn-secondary-sm" id="btn-editor-ask" title="Open Ask Robbie Drawer">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      <span>Ask Robbie</span>
+                    </button>
+                    <button class="btn-secondary-sm" id="btn-editor-copy">Copy</button>
+                    <button class="btn-secondary-sm" id="btn-editor-clear">Clear</button>
+                  </div>
+                </div>
+
+                <!-- Code Editor Body (Gutter + Textarea) -->
+                <div class="dev-editor-body">
+                  <div class="editor-gutter" id="editor-line-numbers">1</div>
+                  <textarea
+                    class="editor-code-surface"
+                    id="editor-textarea"
+                    spellcheck="false"
+                    placeholder="# Write or paste Python code here..."
+                  ></textarea>
+                </div>
+
+                <!-- Status Line Bar -->
+                <div class="dev-editor-status-line">
+                  <span id="editor-cursor-pos">Ln 1, Col 1</span>
+                  <span>•</span>
+                  <span>UTF-8</span>
+                  <span>•</span>
+                  <span>Python 3.11</span>
+                  <span>•</span>
+                  <span id="editor-save-indicator">Local Scratchpad</span>
+                </div>
+
+                <!-- Region 3: Bottom Resizable Execution Console -->
+                <div class="dev-console-drawer" id="dev-console-drawer">
+                  <div class="console-drawer-header">
+                    <div class="console-drawer-title">
+                      <span>Execution Console</span>
+                      <span class="badge badge-neutral" id="console-status-badge">Ready</span>
+                    </div>
+                    <div class="console-drawer-controls">
+                      <button class="btn-text-xs" id="btn-console-clear">Clear Console</button>
+                    </div>
+                  </div>
+                  <div class="console-drawer-body" id="console-output">Ready to execute. Click 'Run' above or press Ctrl+Enter.</div>
+                </div>
+              </div>
+
+              <!-- Region 4: Collapsible 'Ask Robbie' Assistant Drawer (~25%) -->
+              <aside class="dev-ask-robbie-drawer" id="dev-robbie-drawer" style="display: none;">
+                <div class="ask-drawer-header">
+                  <div class="ask-drawer-title">
+                    <div class="brand-icon-xs">R</div>
+                    <span>Ask Robbie (Code Analysis)</span>
+                  </div>
+                  <button class="btn-icon-xs" id="btn-close-ask-drawer" title="Close Drawer">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <div class="ask-drawer-body" id="ask-drawer-body">
+                  <p class="ask-intro">Robbie-25M analyzes your code snippet, detects bugs, and suggests optimizations.</p>
+                  <div class="ask-quick-prompts">
+                    <button class="pill-btn-xs" data-prompt="Explain what this code does">Explain Code</button>
+                    <button class="pill-btn-xs" data-prompt="Are there any bugs or performance issues?">Check Bugs</button>
+                    <button class="pill-btn-xs" data-prompt="Optimize this for performance">Optimize</button>
+                  </div>
+                  <div class="ask-response-box" id="ask-response-box">
+                    <em>Click an action above or type below to consult Robbie.</em>
+                  </div>
+                </div>
+                <div class="ask-drawer-footer">
+                  <input type="text" id="ask-drawer-input" class="input-text-sm" placeholder="Ask about this code..." />
+                  <button class="btn-primary-sm" id="btn-ask-drawer-send">Send</button>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <!-- ============================================================== -->
+          <!-- 7. Memory Manager (Tabbed / Segmented Architecture)            -->
+          <!-- ============================================================== -->
+          <section class="view-pane" id="view-memory">
+            <div class="memory-manager-workspace">
+              <!-- Memory Toolbar & Segmented Tabs -->
+              <div class="memory-toolbar-bar">
+                <div class="segmented-tabs">
+                  <button class="segmented-tab active" data-memtab="profile" id="tab-mem-profile">Profile</button>
+                  <button class="segmented-tab" data-memtab="knowledge" id="tab-mem-knowledge">Knowledge</button>
+                  <button class="segmented-tab" data-memtab="episodes" id="tab-mem-episodes">Episodes</button>
+                  <button class="segmented-tab" data-memtab="session" id="tab-mem-session">Session</button>
+                </div>
+                <div class="memory-toolbar-actions">
+                  <input
+                    type="text"
+                    id="memory-search-filter"
+                    class="input-text-sm"
+                    placeholder="Search memories..."
+                    style="width: 180px;"
+                  />
+                  <button class="btn-primary-sm" id="btn-add-memory-item">+ Add Item</button>
+                  <button class="btn-danger-sm" id="btn-clear-all-memory">Clear Memory</button>
+                </div>
+              </div>
+
+              <!-- Tab Pane 1: Profile Attributes -->
+              <div class="memory-tab-pane active" id="pane-mem-profile">
+                <div class="pane-description">
+                  <span>Persistent User Attributes & Preferences stored in long-term memory.</span>
+                </div>
+                <div class="memory-table-wrap">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 200px;">Key</th>
+                        <th>Value</th>
+                        <th style="width: 100px;">Type</th>
+                        <th style="width: 100px;">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="mem-profile-table-body">
+                      <tr><td colspan="4" class="table-loading">Loading profile attributes...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Tab Pane 2: Knowledge & Notes -->
+              <div class="memory-tab-pane" id="pane-mem-knowledge" style="display: none;">
+                <div class="pane-description">
+                  <span>Saved project knowledge, goals, and technical notes.</span>
+                </div>
+                <div class="notes-grid" id="mem-notes-grid">
+                  <div class="empty-shelf-message">No saved notes found. Click '+ Add Item' to create one.</div>
+                </div>
+              </div>
+
+              <!-- Tab Pane 3: Conversational Episodes -->
+              <div class="memory-tab-pane" id="pane-mem-episodes" style="display: none;">
+                <div class="pane-description">
+                  <span>Persisted conversational highlights and episodic summaries across sessions.</span>
+                </div>
+                <div class="episodes-timeline" id="mem-episodes-timeline">
+                  <div class="empty-shelf-message">No conversation episodes recorded yet.</div>
+                </div>
+              </div>
+
+              <!-- Tab Pane 4: Current Session Slots -->
+              <div class="memory-tab-pane" id="pane-mem-session" style="display: none;">
+                <div class="pane-description">
+                  <span>Active dialogue slots and entity states in the current conversation context.</span>
+                </div>
+                <div class="session-slots-grid" id="mem-session-slots">
+                  <div class="empty-shelf-message">No active session context slots yet.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ============================================================== -->
+          <!-- 8. Settings & Studio Preferences                               -->
+          <!-- ============================================================== -->
+          <section class="view-pane" id="view-settings">
+            <div class="settings-workspace">
+              <div class="settings-group">
+                <div class="settings-group-title">Appearance</div>
+                <div class="settings-row">
+                  <div class="settings-row-label">
+                    <h5>Color Theme</h5>
+                    <p>Switch between Monochromatic Dark and Clean Light themes.</p>
+                  </div>
+                  <div class="settings-row-controls">
+                    <button class="btn-secondary-sm" id="btn-set-theme-dark">Dark</button>
+                    <button class="btn-secondary-sm" id="btn-set-theme-light">Light</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title">Model & Inference</div>
+                <div class="settings-row">
+                  <div class="settings-row-label">
+                    <h5>Robbie-25M Neural Model</h5>
+                    <p>Causal Transformer, 8 Layers, 8 Heads, 512 Embedding Dimension.</p>
+                  </div>
+                  <span class="badge badge-accent">Stage 2 Conversational</span>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-label">
+                    <h5>Context Window & Generation</h5>
+                    <p>128 Token Context Block Size, Top-k 25, Temperature 0.7.</p>
+                  </div>
+                  <span class="badge badge-neutral">Bounded Budget</span>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title">System Monitoring</div>
+                <div class="settings-row">
+                  <div class="settings-row-label">
+                    <h5>Telemetry Refresh Interval</h5>
+                    <p>Frequency for polling CPU, RAM, GPU, and partition metrics.</p>
+                  </div>
+                  <select id="settings-telemetry-interval" class="input-text-sm" style="width: 120px;">
+                    <option value="3000">3 seconds</option>
+                    <option value="5000" selected>5 seconds</option>
+                    <option value="10000">10 seconds</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title">Safety & Permissions</div>
+                <div class="settings-row">
+                  <div class="settings-row-label">
+                    <h5>File System Mode</h5>
+                    <p>Strict read-only inspection policy. Modifications and deletions are locked.</p>
+                  </div>
+                  <span class="badge badge-success">Read-Only Enforced</span>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-label">
+                    <h5>Application Execution</h5>
+                    <p>Controlled Windows shell process execution with explicit user confirmation.</p>
+                  </div>
+                  <span class="badge badge-neutral">Controlled Whitelist</span>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title">About Robbie Studio</div>
+                <div class="settings-row">
+                  <div class="settings-row-label">
+                    <h5>Version</h5>
+                    <p>Robbie Studio Desktop v0.3.0 (Tauri v2 + Deepmind Pair Programming Architecture)</p>
+                  </div>
+                  <span class="badge badge-accent">Release v0.3.0</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- Reusable Modal Dialog Overlay                                        -->
+    <!-- ==================================================================== -->
+    <div class="modal-backdrop" id="app-modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="modal-title">Confirm Action</h3>
+        </div>
+        <div class="modal-body" id="modal-body">
+          Are you sure you want to proceed?
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary-sm" id="modal-btn-cancel">Cancel</button>
+          <button class="btn-primary-sm" id="modal-btn-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+  </body>
+</html>

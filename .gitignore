@@ -63,3 +63,9 @@ logs/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Frontend & Desktop App Builds
+node_modules/
+target/
+dist/
+dist-ssr/

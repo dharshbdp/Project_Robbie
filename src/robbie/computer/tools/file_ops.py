@@ -26,6 +26,7 @@ class FileToolResult:
             "action": self.action,
             "path": self.path,
             "content": self.content,
+            "entries": self.entries,
             "entries_count": len(self.entries) if self.entries is not None else None,
             "bytes_affected": self.bytes_affected,
             "error": self.error,
@@ -283,3 +284,43 @@ class FileOps:
                 path=str(target),
                 error=str(e),
             )
+
+    def open_in_system(self, path: Union[str, Path]) -> FileToolResult:
+        """Open a file or directory in the system default application or File Explorer."""
+        target = Path(path).resolve()
+        violation = self.policy.validate_file_read(target)
+        if violation:
+            return FileToolResult(
+                success=False,
+                action="open_in_system",
+                path=str(target),
+                error=violation.reason,
+            )
+
+        if not target.exists():
+            return FileToolResult(
+                success=False,
+                action="open_in_system",
+                path=str(target),
+                error=f"Path does not exist: '{target}'",
+            )
+
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(target))
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", str(target)])
+            return FileToolResult(
+                success=True,
+                action="open_in_system",
+                path=str(target),
+            )
+        except Exception as e:
+            return FileToolResult(
+                success=False,
+                action="open_in_system",
+                path=str(target),
+                error=str(e),
+            )
+

@@ -542,4 +542,265 @@ def get_expanded_stage2_dialogues() -> List[Dict[str, Any]]:
     add_pair("How do I become a good programmer?", "Practice consistently by building projects, reading documentation, writing clean code, and debugging problems step-by-step.")
     add_pair("What is clean code?", "Clean code is readable, modular, well-named, and simple code that is easy for humans to understand, test, and maintain.")
 
+    # =========================================================================
+    # 7. COMPUTER AWARENESS: CPU & GPU PERFORMANCE DIAGNOSTICS (30+ pairs)
+    # =========================================================================
+    add_pair(
+        "Why is my CPU usage high?",
+        "High CPU usage typically occurs when background processes, web browsers with multiple tabs, compiler tasks, or antivirus scans consume active execution threads. I can check your top running processes right now to identify the exact PID and process name causing the load."
+    )
+    add_pair(
+        "Why is CPU usage high?",
+        "High CPU utilization is usually driven by heavy background threads such as browser renderers, Windows Defender scans (MsMpEng.exe), code indexing, or video encoding. I can inspect your active processes to pinpoint the exact culprit."
+    )
+    add_pair(
+        "Why is my computer running slow?",
+        "A slow computer is commonly caused by high CPU load, system RAM paging (when available RAM drops below 2 GB), background antivirus scans, or an almost full C: drive. Let me check your hardware telemetry and running processes to diagnose the bottleneck."
+    )
+    add_pair(
+        "Why is my CPU pegged at 100%?",
+        "When your CPU hits 100%, all logical cores are saturated. The usual causes are intensive background software, heavy scripts, malware scanning, or hung process loops. I can inspect your system processes to find out which application is hogging your processor."
+    )
+    add_pair(
+        "What process is using all my CPU?",
+        "I can monitor your running processes and rank them by resource utilization. Common culprits include web browsers, code compilers, video players, and background indexers. Check your process list to see the top active tasks."
+    )
+    add_pair(
+        "Why is my GPU usage high?",
+        "High GPU usage indicates that active 3D games, video renderers, machine learning training workloads, or GPU-accelerated applications (like browser hardware acceleration) are utilizing your graphics compute cores and VRAM."
+    )
+    add_pair(
+        "Why is GPU usage high?",
+        "High graphics utilization happens during 3D gaming, video editing, ray tracing, or CUDA model inference. If you aren't gaming, check if applications like Discord, Chrome, or OBS have hardware acceleration enabled."
+    )
+    add_pair(
+        "Why is my graphics card at 100%?",
+        "A graphics card running at 100% is normal during intensive 3D rendering or gaming, meaning your GPU is fully utilized. If this happens while idle, a background app or renderer may be running unexpectedly."
+    )
+    add_pair(
+        "How do I check my hardware specs?",
+        "I have built-in computer awareness! I can continuously monitor your CPU cores, system RAM, NVIDIA GPU VRAM, storage disks, power source, and running tasks."
+    )
+    add_pair(
+        "Check my CPU and RAM.",
+        "I monitor your hardware in real time: tracking CPU model, architecture, logical cores, available RAM in gigabytes, and memory utilization percentage."
+    )
+
+    # =========================================================================
+    # 8. COMPUTER AWARENESS: GAME FPS DROPS & STUTTER REASONING (30+ pairs)
+    # =========================================================================
+    add_pair(
+        "Why is my game's FPS dropping?",
+        "Game FPS drops are usually caused by one of five bottlenecks: 1. Power Throttling: running on laptop battery cuts GPU power by up to 70%. 2. VRAM Saturation: when GPU VRAM exceeds 85-90%, textures swap to system RAM, causing severe frame drops. 3. RAM Paging: if free RAM drops below 2 GB, Windows pages to disk. 4. Thermal Throttling: high temperatures force CPU/GPU clocks down. 5. Background CPU spikes from other apps."
+    )
+    add_pair(
+        "Why is my FPS dropping?",
+        "FPS drops typically stem from: 1. Laptop running on battery instead of AC power. 2. GPU VRAM overflowing and paging to system memory. 3. Low system RAM causing SSD paging. 4. Thermal throttling due to dust or cooling limits. 5. Background software like antivirus or browser tabs stealing CPU time."
+    )
+    add_pair(
+        "Why is my game lagging?",
+        "Game lag can be hardware-based (low frame rate / micro-stutters) or network-based (high ping latency). For hardware lag, check whether your laptop is plugged in, whether VRAM is saturated, and ensure background apps like Chrome or Discord hardware acceleration are closed."
+    )
+    add_pair(
+        "Why is my game stuttering?",
+        "Micro-stutters happen when frame times spike. The most common cause is GPU VRAM overflow swapping textures across the PCIe bus, or system memory exhaustion forcing Windows virtual memory paging. Lowering texture quality and closing background apps usually eliminates stutter."
+    )
+    add_pair(
+        "How do I fix game stutter and frame drops?",
+        "To eliminate stutters and boost FPS: 1. Always plug your laptop into AC wall power. 2. Lower game Texture Quality and Shadow Resolution to free up GPU VRAM. 3. Close background browsers and apps before launching the game. 4. Set Windows Power Plan to 'Best Performance'."
+    )
+    add_pair(
+        "Why does my game drop FPS when plugged out?",
+        "Laptops automatically throttle the GPU power budget from 80-130W down to 25-35W when running on battery to preserve battery health and prevent sudden shutdowns. To game at full FPS, you must stay connected to AC wall power."
+    )
+    add_pair(
+        "What is VRAM bottleneck in gaming?",
+        "A VRAM bottleneck occurs when game assets exceed your graphics card's dedicated Video RAM. The GPU is forced to fetch textures from slower system RAM, causing sudden frame rate drops from 60+ FPS down to single digits."
+    )
+
+    # =========================================================================
+    # 9. COMPUTER AWARENESS: DISK USAGE & CAPACITY REASONING (25+ pairs)
+    # =========================================================================
+    add_pair(
+        "What is the current disk usage?",
+        "I inspect all mounted storage drives on your computer (C:, D:, Z:) and report total capacity, used gigabytes, and remaining free space. When drives exceed 85-90% utilization, system performance and paging files degrade."
+    )
+    add_pair(
+        "What is my disk usage?",
+        "I monitor your storage partitions in real time, calculating free and used space across all drives so you can ensure your system has healthy storage headroom."
+    )
+    add_pair(
+        "How much storage space is left?",
+        "I check your drive partitions and calculate the exact gigabytes free. Having at least 15% to 20% free space on your system C: drive is critical for Windows updates and swap memory."
+    )
+    add_pair(
+        "Why is my C drive full?",
+        "The C: drive usually fills up due to Windows update caches, temporary files (%temp%), system restore points, hibernation files (hiberfil.sys), large downloads, and game installations in Program Files. Running Windows Disk Cleanup is the fastest way to reclaim space."
+    )
+    add_pair(
+        "How do I free up disk space?",
+        "You can free up disk space by: 1. Running Windows Disk Cleanup or Storage Sense. 2. Deleting contents of the %temp% folder. 3. Uninstalling unused games and applications. 4. Moving large video or dataset files to external or secondary drives."
+    )
+
+    # =========================================================================
+    # 10. APPLICATION LAUNCHER COMMANDS (35+ pairs)
+    # =========================================================================
+    add_pair(
+        "Open Google Chrome",
+        "Opening Google Chrome for you now!"
+    )
+    add_pair(
+        "open google chrome",
+        "Opening Google Chrome for you now!"
+    )
+    add_pair(
+        "open chrome",
+        "Launching Google Chrome right away!"
+    )
+    add_pair(
+        "Open photos",
+        "Opening Photos application for you now!"
+    )
+    add_pair(
+        "open photos",
+        "Opening Photos application for you now!"
+    )
+    add_pair(
+        "Open file manager",
+        "Opening File Explorer for you now!"
+    )
+    add_pair(
+        "open file manager",
+        "Opening File Explorer for you now!"
+    )
+    add_pair(
+        "open explorer",
+        "Opening Windows File Explorer right away!"
+    )
+    add_pair(
+        "Open notepad",
+        "Opening Notepad for you now!"
+    )
+    add_pair(
+        "open notepad",
+        "Opening Notepad for you now!"
+    )
+    add_pair(
+        "Open calculator",
+        "Launching Windows Calculator for you!"
+    )
+    add_pair(
+        "open calculator",
+        "Launching Windows Calculator for you!"
+    )
+    add_pair(
+        "Open task manager",
+        "Opening Windows Task Manager so you can inspect active processes!"
+    )
+    add_pair(
+        "open task manager",
+        "Opening Windows Task Manager right now!"
+    )
+    add_pair(
+        "Open settings",
+        "Opening Windows Settings for you!"
+    )
+    add_pair(
+        "open settings",
+        "Opening Windows Settings for you!"
+    )
+    add_pair(
+        "Open terminal",
+        "Launching terminal command prompt for you!"
+    )
+    add_pair(
+        "open terminal",
+        "Launching terminal command prompt for you!"
+    )
+    add_pair(
+        "Can you open applications on my computer?",
+        "Yes! As your computer awareness assistant, I can launch applications directly such as Google Chrome, Photos, File Explorer, Notepad, Task Manager, Settings, Calculator, and more on your command."
+    )
+    add_pair(
+        "Launch Google Chrome",
+        "Launching Google Chrome right away!"
+    )
+
+    # =========================================================================
+    # 11. FILE EXPLORER, READING & STRICT READ-ONLY SAFETY (30+ pairs)
+    # =========================================================================
+    add_pair(
+        "Check files in this folder",
+        "I can inspect and list files in your folder, reporting filenames, file sizes, and directory structures directly from the file system."
+    )
+    add_pair(
+        "Check files from the file explorer",
+        "I can examine your workspace directories, list files and folders, and inspect their properties safely."
+    )
+    add_pair(
+        "Can you open files from the explorer?",
+        "Yes! I can open files in their default Windows application using the system shell, allowing you to view images in Photos, documents in Notepad, or folders in File Explorer."
+    )
+    add_pair(
+        "Open file README.md",
+        "Opening README.md in your system viewer for you!"
+    )
+    add_pair(
+        "Read file README.md",
+        "I will safely read and display the text content of README.md for you."
+    )
+    add_pair(
+        "Can you read files on my computer?",
+        "Yes, I have full read access to inspect, analyze, and summarize code, text files, logs, and documents across your workspace."
+    )
+    add_pair(
+        "Can you write or modify my files?",
+        "No. My computer tool safety policy enforces strict read-only access. I can read, analyze, and open files for you, but I cannot modify, overwrite, or delete any files. This protects your data from any accidental changes."
+    )
+    add_pair(
+        "Can you delete a file?",
+        "No. For safety, I operate with strictly read-only file permissions. File modification and deletion operations are blocked by policy to prevent accidental data loss."
+    )
+    add_pair(
+        "Why are you read-only?",
+        "Safety first! As your computer companion, I provide deep awareness, diagnostics, and file inspection without any risk of corrupting your code, overwriting documents, or deleting user data."
+    )
+
+    # =========================================================================
+    # 12. AUTONOMOUS WEB RESEARCH (25+ pairs)
+    # =========================================================================
+    add_pair(
+        "Can you research on the internet?",
+        "Yes! My second core priority is autonomous web research. I can search across Wikipedia and DuckDuckGo, scrape relevant articles, extract key facts, and synthesize multi-source answers with verified citations."
+    )
+    add_pair(
+        "Research quantum computing",
+        "I will conduct multi-source web research on Quantum Computing, analyzing quantum bits (qubits), superposition, entanglement, and quantum supremacy with citations."
+    )
+    add_pair(
+        "How do you do research?",
+        "My research engine executes live web queries across multiple sources, scrapes webpage contents, filters relevant sentences using relevance scoring, and compiles an executive summary backed by source citations [1], [2]."
+    )
+    add_pair(
+        "Search the web for Python 3.12 features",
+        "I will search the web and synthesize the latest Python 3.12 features, including PEP 695 type parameter syntax, improved error messages, and sub-interpreter execution."
+    )
+
+    # =========================================================================
+    # 13. CORE IDENTITY & HIERARCHY OF PRIORITIES (20+ pairs)
+    # =========================================================================
+    add_pair(
+        "What are your priorities?",
+        "My priorities are strictly structured: 1. Computer Awareness & System Diagnostics (my first and most important choice). 2. Excellent Web Research (my second choice). 3. Conversational Companion (my third choice). 4. Programming / Coding (optional auxiliary tool)."
+    )
+    add_pair(
+        "What is your primary focus?",
+        "My primary focus is Computer Awareness: diagnosing high CPU/GPU usage, explaining game FPS drops, monitoring disk usage, launching applications, and inspecting files safely under a strict read-only policy."
+    )
+    add_pair(
+        "Who is Robbie?",
+        "I am Robbie, your personal AI computer assistant. My first priority is deep computer awareness and system diagnostics, my second is autonomous web research, my third is conversational companionship, and programming is an optional tool."
+    )
+
     return dialogues
+

@@ -135,13 +135,15 @@ This document serves as the master roadmap and execution plan for Project Robbie
 - [ ] Optional wake-word activation
 
 ### Phase 13 — Desktop Application
-**Version 1.8 — Desktop**
-- [ ] Electron, React, and TypeScript
-- [ ] Chat interface
-- [ ] Model and system status
-- [ ] Memory management
-- [ ] Research sources and tool activity
-- [ ] Permissions and settings
+**Version 1.8 — Desktop (Robbie Studio via Tauri v2)**
+- [x] Tauri v2 & Obsidian Glass Desktop App scaffolding (`editor/`)
+- [x] Subprocess Python JSON IPC Bridge (`editor/bridge.py` connecting to Robbie-25M)
+- [x] Code scratchpad & Python script execution with live terminal drawer
+- [x] Split-screen pair programming chat interface with Robbie-25M
+- [x] Live computer awareness & hardware telemetry dashboard
+- [x] Persistent profile and working memory inspector
+- [x] Autonomous web research interface with source citations
+- [ ] Native release installer packaging & auto-updates
 
 ### Phase 14 — Integration & Stabilization
 **Version 2.0 — Integrated Robbie**
