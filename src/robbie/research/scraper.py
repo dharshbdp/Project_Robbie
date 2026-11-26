@@ -19,6 +19,7 @@ class WebpageDocument:
     char_count: int
     status_code: int = 200
     error: Optional[str] = None
+    raw_html: str = ""
 
 
 class HTMLContentExtractor(HTMLParser):
@@ -43,6 +44,12 @@ class HTMLContentExtractor(HTMLParser):
         re.compile(r"\ball\s+rights\s+reserved\b", re.IGNORECASE),
         re.compile(r"\bshare\s+on\s+(facebook|twitter|linkedin|reddit)\b", re.IGNORECASE),
         re.compile(r"^(advertisement|sponsored|privacy\s+policy|terms\s+of\s+(?:use|service))$", re.IGNORECASE),
+        re.compile(r"^from wikipedia, the free encyclopedia", re.IGNORECASE),
+        re.compile(r"\b(jump to content|jump to navigation|jump to search)\b", re.IGNORECASE),
+        re.compile(r"^main article:\s*", re.IGNORECASE),
+        re.compile(r"\b(add as a preferred source|follow on google news|trusted source)\b", re.IGNORECASE),
+        re.compile(r"^editor'?s note:\s*", re.IGNORECASE),
+        re.compile(r"^retrieved from \"https?://", re.IGNORECASE),
     ]
 
     def __init__(self):
@@ -152,7 +159,7 @@ class WebpageScraper:
                         error=f"Unsupported non-text Content-Type: '{content_type}'",
                     )
 
-                raw_bytes = response.read(150_000)  # Read up to 150KB
+                raw_bytes = response.read(1_500_000)  # Read up to 1.5MB for complete tables & filmographies
                 encoding = response.headers.get_content_charset() or "utf-8"
                 html_text = raw_bytes.decode(encoding, errors="replace")
 
@@ -173,6 +180,7 @@ class WebpageScraper:
                     text=text,
                     char_count=len(text),
                     status_code=status,
+                    raw_html=html_text,
                 )
         except Exception as e:
             logger.debug(f"Failed to fetch '{url}': {e}")

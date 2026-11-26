@@ -8,7 +8,8 @@ import platform
 import shutil
 import string
 import sys
-from typing import List, Optional, Dict, Any
+import time
+from typing import List, Optional, Dict, Any, Tuple
 
 from robbie.utils.device import get_hardware_info, HardwareReport
 
@@ -21,6 +22,7 @@ class CPUInfo:
     logical_cores: int
     physical_cores: Optional[int] = None
     system: str = "Unknown"
+    cpu_usage_percent: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -29,6 +31,8 @@ class CPUInfo:
             "logical_cores": self.logical_cores,
             "physical_cores": self.physical_cores,
             "system": self.system,
+            "cpu_usage_percent": self.cpu_usage_percent,
+            "usage_percent": self.cpu_usage_percent,
         }
 
 
@@ -90,17 +94,76 @@ class GPUInfo:
 class HardwareMonitor:
     """Queries underlying system hardware specifications and live resource utilization."""
 
+    _last_cpu_times: Optional[Tuple[int, int, int]] = None
+    _last_cpu_time_ts: float = 0.0
+
+    @classmethod
+    def get_cpu_usage_percent(cls) -> Optional[float]:
+        """Compute live CPU utilization percentage across all cores."""
+        if sys.platform == "win32":
+            try:
+                class FILETIME(ctypes.Structure):
+                    _fields_ = [("dwLowDateTime", ctypes.c_uint), ("dwHighDateTime", ctypes.c_uint)]
+
+                def to_int(ft):
+                    return (ft.dwHighDateTime << 32) | ft.dwLowDateTime
+
+                def read_times():
+                    idle, kernel, user = FILETIME(), FILETIME(), FILETIME()
+                    if not ctypes.windll.kernel32.GetSystemTimes(
+                        ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)
+                    ):
+                        return None
+                    return to_int(idle), to_int(kernel), to_int(user)
+
+                now = time.time()
+                t1 = cls._last_cpu_times
+                ts1 = cls._last_cpu_time_ts
+
+                if t1 is None or (now - ts1) > 10.0 or (now - ts1) < 0.05:
+                    r1 = read_times()
+                    if r1 is None:
+                        return None
+                    time.sleep(0.06)
+                    r2 = read_times()
+                    if r2 is None:
+                        return None
+                    i1, k1, u1 = r1
+                    i2, k2, u2 = r2
+                else:
+                    r2 = read_times()
+                    if r2 is None:
+                        return None
+                    i1, k1, u1 = t1
+                    i2, k2, u2 = r2
+
+                cls._last_cpu_times = (i2, k2, u2)
+                cls._last_cpu_time_ts = time.time()
+
+                d_idle = i2 - i1
+                d_kernel = k2 - k1
+                d_user = u2 - u1
+                total = d_kernel + d_user
+                if total > 0 and d_idle <= total:
+                    pct = 100.0 * (1.0 - (d_idle / total))
+                    return round(max(0.0, min(100.0, pct)), 1)
+            except Exception:
+                pass
+        return None
+
     @classmethod
     def get_cpu_info(cls) -> CPUInfo:
         """Query CPU model, architecture, and core counts."""
         proc = platform.processor() or platform.machine() or "Generic Processor"
         logical = os.cpu_count() or 1
+        usage = cls.get_cpu_usage_percent()
         return CPUInfo(
             processor=proc,
             architecture=platform.machine(),
             logical_cores=logical,
             physical_cores=max(1, logical // 2) if logical > 1 else 1,
             system=f"{platform.system()} {platform.release()}",
+            cpu_usage_percent=usage,
         )
 
     @classmethod

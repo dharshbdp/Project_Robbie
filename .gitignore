@@ -55,6 +55,7 @@ checkpoints/
 *.sqlite
 logs/
 *.log
+chat_history*.json
 
 # IDE & OS
 .vscode/
@@ -63,6 +64,14 @@ logs/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Environment & Secrets
+.env
+.env.*
+.enb
+.enb/
+*.pem
+*.key
 
 # Frontend & Desktop App Builds
 node_modules/

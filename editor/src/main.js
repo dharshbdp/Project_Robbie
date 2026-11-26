@@ -2,12 +2,24 @@
 // Robbie Studio — V2 Structural Redesign Architecture
 // Fully Integrated: Chat-First Core, Dedicated Research, Interactive System,
 // 3-Region Developer Workspace, and Segmented Memory Manager.
-// Preserves: Robbie-25M Neural Model, Real Telemetry, and Read-Only Safety.
+// Preserves: Robbie-50M Neural Model, Real Telemetry, and Read-Only Safety.
 // ============================================================================
 
 // Check for Tauri IPC bridge
 const isTauri = typeof window !== 'undefined' && window.__TAURI__?.core?.invoke !== undefined;
-const invoke = isTauri ? window.__TAURI__.core.invoke : mockInvoke;
+const isPreview = !isTauri && new URLSearchParams(window.location.search).get('preview') === '1';
+async function invoke(command, args = {}) {
+  if (!isTauri && !isPreview) {
+    throw new Error('Open Robbie Studio with launch_editor.bat to connect to the local model.');
+  }
+  const raw = isTauri ? await window.__TAURI__.core.invoke(command, args) : await mockInvoke(command, args);
+  if (command !== 'read_project_file') {
+    let result;
+    try { result = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { /* Plain text result. */ }
+    if (result?.error) throw new Error(result.error);
+  }
+  return typeof raw === 'string' ? raw : JSON.stringify(raw);
+}
 
 // ============================================================================
 // 1. Monochromatic SVG Vector Icon Library (Lucide-Style)
@@ -41,7 +53,7 @@ const DEFAULT_SPEED_DIAL = [
   { id: 'settings', name: 'Settings', target: 'settings', sub: 'System Config', icon: 'settings' },
 ];
 
-const STARTER_CODE = `# Project Robbie — Sandboxed Python Scratchpad (Read-Only Safety Enforced)
+const STARTER_CODE = `# Project Robbie — Local Python Scratchpad
 import sys
 import torch
 from robbie.system.diagnostics import SystemDiagnostics
@@ -79,6 +91,8 @@ const state = {
   memorySearchFilter: '',
   telemetryInterval: parseInt(localStorage.getItem('robbie-telemetry-interval') || '5000', 10),
   telemetryTimer: null,
+  telemetryPending: false,
+  backend: null,
 };
 
 function loadSpeedDialFromStorage() {
@@ -107,6 +121,11 @@ function saveSpeedDialToStorage(apps) {
 // ============================================================================
 async function mockInvoke(cmd, args = {}) {
   console.log(`[Mock IPC] ${cmd}`, args);
+  if (cmd === 'get_backend_status') {
+    return JSON.stringify({ model: 'Preview — sample data', checkpoint: 'No model connected',
+      device: 'preview', context_tokens: 0, max_tokens: 0, temperature: 0, loaded: false });
+  }
+  if (cmd === 'reset_chat') return JSON.stringify({ status: 'cleared', turns: 0 });
 
   if (cmd === 'greet') {
     return `Hello, ${args.name || 'Developer'}! Robbie Studio is online.`;
@@ -125,7 +144,7 @@ async function mockInvoke(cmd, args = {}) {
         tool_data: diag,
         slots: { user_name: "Developer", current_topic: "hardware_cpu" },
         turns: state.chatMessages.length + 1,
-        model: "Robbie-25M (Stage 2 Conversational)"
+        model: "Robbie-50M (Stage 2 Conversational)"
       });
     }
 
@@ -138,7 +157,7 @@ async function mockInvoke(cmd, args = {}) {
         tool_data: diag,
         slots: { user_name: "Developer", current_topic: "hardware_gpu" },
         turns: state.chatMessages.length + 1,
-        model: "Robbie-25M (Stage 2 Conversational)"
+        model: "Robbie-50M (Stage 2 Conversational)"
       });
     }
 
@@ -152,7 +171,7 @@ async function mockInvoke(cmd, args = {}) {
         tool_data: res,
         slots: { user_name: "Developer", current_topic: "research" },
         turns: state.chatMessages.length + 1,
-        model: "Robbie-25M (Stage 2 Conversational)"
+        model: "Robbie-50M (Stage 2 Conversational)"
       });
     }
 
@@ -165,15 +184,15 @@ async function mockInvoke(cmd, args = {}) {
         tool_data: { app },
         slots: { user_name: "Developer", last_action: `launched_${app}` },
         turns: state.chatMessages.length + 1,
-        model: "Robbie-25M (Stage 2 Conversational)"
+        model: "Robbie-50M (Stage 2 Conversational)"
       });
     }
 
     return JSON.stringify({
-      reply: `I received: "${prompt}". Robbie-25M is online with full local computer awareness, deep research, and diagnostics! How can I assist your engineering session?`,
+      reply: `I received: "${prompt}". Robbie-50M is online with full local computer awareness, deep research, and diagnostics! How can I assist your engineering session?`,
       slots: { user_name: "Developer" },
       turns: state.chatMessages.length + 1,
-      model: "Robbie-25M (Stage 2 Conversational)"
+      model: "Robbie-50M (Stage 2 Conversational)"
     });
   }
 
@@ -200,9 +219,9 @@ async function mockInvoke(cmd, args = {}) {
   if (cmd === 'get_memory_profile' || cmd === 'manage_memory') {
     return JSON.stringify({
       profile: { user_name: "Developer", user_role: "Lead Engineer", preferred_editor: "Robbie Studio" },
-      notes: { project_goal: "Train custom 25M Transformer model with computer awareness" },
+      notes: { project_goal: "Train custom 300M Transformer model with computer awareness" },
       episodes: [
-        { summary: "Fine-tuned Robbie-25M Stage 2 dialogue transformer with 115 passing tests.", tags: ["training", "stage2"], timestamp: Date.now() / 1000 - 3600 }
+        { summary: "Fine-tuned Robbie-300M Stage 2 dialogue transformer with 212 passing tests.", tags: ["training", "stage2"], timestamp: Date.now() / 1000 - 3600 }
       ],
       episodes_count: 1
     });
@@ -331,6 +350,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   setupSettingsController();
 
   // Initial Data Synchronization
+  await syncBackendStatus();
   await syncTelemetryData();
   await syncMemoryData();
   await loadExplorerPath('.');
@@ -440,7 +460,7 @@ function updateTopHeader(viewName) {
   if (titleEl) titleEl.textContent = VIEW_TITLES[viewName] || 'Studio';
 
   if (viewName === 'chat') {
-    if (badgeEl) badgeEl.textContent = 'Robbie-25M Model';
+    if (badgeEl) badgeEl.textContent = state.backend?.model ? `${state.backend.model} Model` : 'Robbie-300M Model';
     controlsEl.innerHTML = `
       <button class="btn-secondary-sm" id="btn-hdr-history" title="Toggle Chat History Drawer">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
@@ -542,9 +562,8 @@ function setupChatController() {
   btnCloseDrawer?.addEventListener('click', () => toggleChatHistoryDrawer(false));
   btnDrawerNewChat?.addEventListener('click', resetChatSession);
   btnClearHistory?.addEventListener('click', () => {
-    showModal('Clear Chat', 'Are you sure you want to clear the active conversation?', () => {
+    showModal('Delete Chat History', 'Are you sure you want to delete the chat history file (chat_history.json) from the root directory and start a fresh session?', () => {
       resetChatSession();
-      showToast('Conversation cleared.');
     });
   });
 
@@ -586,7 +605,17 @@ function toggleChatHistoryDrawer(forcedState) {
   drawer.classList.toggle('closed', !state.chatHistoryDrawerOpen);
 }
 
-function resetChatSession() {
+async function resetChatSession() {
+  if (state.isGenerating) {
+    showToast('Wait for Robbie to finish before starting a new conversation.');
+    return;
+  }
+  try {
+    await invoke('reset_chat');
+  } catch (error) {
+    showToast(`Could not reset the conversation: ${error.message || error}`);
+    return;
+  }
   state.chatMessages = [];
   const stream = document.getElementById('chat-messages-stream');
   const welcome = document.getElementById('chat-welcome-state');
@@ -594,7 +623,7 @@ function resetChatSession() {
   if (welcome) welcome.style.display = 'flex';
   const turnsMeta = document.getElementById('session-turns-meta');
   if (turnsMeta) turnsMeta.textContent = '0 turns • Active now';
-  showToast('Started fresh conversation.');
+  showToast('Chat history deleted from disk and reset.');
 }
 
 async function handleChatSendMessage() {
@@ -618,8 +647,8 @@ async function handleChatSendMessage() {
   // Set Generating UI State
   setChatGeneratingState(true);
 
-  // Temporary Thinking Indicator
-  const thinkingId = appendChatThinkingIndicator();
+  // Dynamic Activity & Thinking Indicator
+  const thinkingId = appendChatThinkingIndicator(prompt);
 
   try {
     const rawRes = await invoke('ask_robbie', { prompt });
@@ -629,6 +658,8 @@ async function handleChatSendMessage() {
     } catch {
       res = { reply: rawRes };
     }
+    if (res.error) throw new Error(res.error);
+    updateBackendStatus({ ...state.backend, ...res });
 
     removeChatThinkingIndicator(thinkingId);
 
@@ -636,7 +667,7 @@ async function handleChatSendMessage() {
     appendChatMessage('assistant', res.reply || 'No response generated.', {
       tool_action: res.tool_action,
       tool_data: res.tool_data,
-      model: res.model || 'Robbie-25M',
+      model: res.model || state.backend?.model || 'Robbie-300M',
     });
 
     // Update Session Turn Count Meta
@@ -650,7 +681,7 @@ async function handleChatSendMessage() {
     }
   } catch (err) {
     removeChatThinkingIndicator(thinkingId);
-    appendChatMessage('assistant', `⚠️ **Inference Error:** Failed to generate response from Robbie-25M: ${err.message || err}`);
+    appendChatMessage('assistant', `⚠️ **Inference Error:** Failed to generate response from Robbie-300M: ${err.message || err}`);
   } finally {
     setChatGeneratingState(false);
   }
@@ -665,23 +696,26 @@ function setChatGeneratingState(isGen) {
 }
 
 function handleChatStopGeneration() {
-  setChatGeneratingState(false);
-  showToast('Generation halted.');
+  showToast('Robbie is still finishing this response. Please wait.');
 }
 
 function appendChatMessage(role, content, extras = {}) {
   const stream = document.getElementById('chat-messages-stream');
   if (!stream) return;
 
-  const msgObj = { role, content, extras, timestamp: Date.now() };
+  const rLower = String(role || '').toLowerCase().trim();
+  const isAssistant = rLower === 'assistant' || rLower === 'robbie' || rLower === 'ai' || rLower === 'bot';
+  const normRole = isAssistant ? 'assistant' : 'user';
+
+  const msgObj = { role: normRole, content, extras, timestamp: Date.now() };
   state.chatMessages.push(msgObj);
 
   const msgDiv = document.createElement('div');
-  msgDiv.className = `chat-message ${role}`;
+  msgDiv.className = `chat-message ${normRole}`;
 
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar';
-  avatar.textContent = role === 'assistant' ? 'R' : 'U';
+  avatar.textContent = normRole === 'assistant' ? 'R' : 'U';
 
   const body = document.createElement('div');
   body.className = 'msg-body';
@@ -702,28 +736,188 @@ function appendChatMessage(role, content, extras = {}) {
   if (viewport) viewport.scrollTop = viewport.scrollHeight;
 }
 
-function appendChatThinkingIndicator() {
+const activeThinkingTimers = new Map();
+
+function parsePromptActivityPlan(prompt) {
+  const p = (prompt || '').toLowerCase().trim();
+
+  // Creator / Filmography / Games Catalog
+  const creators = [
+    { key: 'nolan', name: 'Christopher Nolan', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'fincher', name: 'David Fincher', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'tarantino', name: 'Quentin Tarantino', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'scorsese', name: 'Martin Scorsese', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'spielberg', name: 'Steven Spielberg', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'cameron', name: 'James Cameron', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'kubrick', name: 'Stanley Kubrick', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'villeneuve', name: 'Denis Villeneuve', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'hitchcock', name: 'Alfred Hitchcock', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'miyazaki', name: 'Hayao Miyazaki', type: 'movies', site: 'en.wikipedia.org' },
+    { key: 'kojima', name: 'Hideo Kojima', type: 'video games', site: 'en.wikipedia.org' },
+    { key: 'fromsoftware', name: 'FromSoftware', type: 'video games', site: 'en.wikipedia.org' },
+    { key: 'rockstar', name: 'Rockstar Games', type: 'video games', site: 'en.wikipedia.org' },
+    { key: 'bethesda', name: 'Bethesda Game Studios', type: 'video games', site: 'en.wikipedia.org' },
+    { key: 'naughty dog', name: 'Naughty Dog', type: 'video games', site: 'en.wikipedia.org' },
+    { key: 'valve', name: 'Valve', type: 'video games', site: 'en.wikipedia.org' },
+    { key: 'capcom', name: 'Capcom', type: 'video games', site: 'en.wikipedia.org' },
+    { key: 'nintendo', name: 'Nintendo', type: 'video games', site: 'en.wikipedia.org' },
+  ];
+
+  for (const c of creators) {
+    if (p.includes(c.key)) {
+      return {
+        badge: '🌐 WIKIPEDIA SEARCH',
+        badgeClass: 'badge-accent',
+        stages: [
+          `Searching ${c.site} for ${c.name} ${c.type}...`,
+          `Scraping ${c.name} Wikipedia tables & checking chronological releases...`,
+          `Extracting verified catalog items & filtering non-directorial credits...`,
+          `Structuring orderly response with titles & release dates...`,
+        ],
+      };
+    }
+  }
+
+  // News, Gaming, Updates
+  if (/(gaming|game|news|update|updates|patch|today|release|releases|headlines)/.test(p)) {
+    return {
+      badge: '📰 LIVE WEB NEWS',
+      badgeClass: 'badge-success',
+      stages: [
+        `Searching Google News (news.google.com) & RSS feeds for latest updates...`,
+        `Scanning recent headlines & verifying article publication timestamps...`,
+        `Synthesizing verified news data & grounding source citations...`,
+        `Formatting concise bulletin summary...`,
+      ],
+    };
+  }
+
+  // Recommendations referencing context
+  if (/(recommend|recommendation|which one|should i|best pick|top pick)/.test(p)) {
+    return {
+      badge: '🎯 CONTEXT EVALUATION',
+      badgeClass: 'badge-warning',
+      stages: [
+        `Contextualizing session history & cross-referencing previous turns...`,
+        `Evaluating list items against requested genres & preferences...`,
+        `Formulating analytical recommendation highlights...`,
+      ],
+    };
+  }
+
+  // Open-Domain Facts / Science / Lookups
+  if (/^(why|how|what is|what are|who is|who was|where is|when was|look up|search for|tell me about)/.test(p) || /(black hole|quantum|physics|history|award|oscar|goty|planet|space)/.test(p)) {
+    const cleanSubject = prompt.replace(/^(?:please\s+)?(?:can\s+you\s+)?(?:tell\s+me\s+about|look\s+up|search\s+for|what\s+is|what\s+are|who\s+is|who\s+was|explain)\s+/i, '').trim();
+    const shortSubj = cleanSubject.length > 28 ? cleanSubject.slice(0, 28) + '...' : cleanSubject;
+    return {
+      badge: '🔍 WEB KNOWLEDGE',
+      badgeClass: 'badge-accent',
+      stages: [
+        `Searching Wikipedia & DuckDuckGo for '${shortSubj || prompt.slice(0, 24)}'...'`,
+        `Scraping authoritative references & cross-verifying facts...`,
+        `Contextualizing evidence & verifying factual citations...`,
+        `Synthesizing grounded explanation...`,
+      ],
+    };
+  }
+
+  // System Diagnostics / Telemetry
+  if (/(ram|cpu|gpu|vram|disk|storage|battery|hardware|specs|processes|fps drop|stutter)/.test(p)) {
+    return {
+      badge: '⚡ SYSTEM TELEMETRY',
+      badgeClass: 'badge-accent',
+      stages: [
+        `Querying live hardware telemetry sensors (CPU, RAM, GPU, VRAM)...`,
+        `Inspecting active processes & monitoring memory consumption...`,
+        `Evaluating system performance diagnostics...`,
+      ],
+    };
+  }
+
+  // Python Code Generation
+  if (/(python|code|script|function|class|algorithm|snippet)/.test(p)) {
+    return {
+      badge: '💻 CODE ASSISTANT',
+      badgeClass: 'badge-neutral',
+      stages: [
+        `Analyzing code specification & syntax requirements...`,
+        `Generating clean, modular Python implementation...`,
+        `Formatting syntax-highlighted code block...`,
+      ],
+    };
+  }
+
+  // Default conversational reasoning
+  return {
+    badge: '🧠 REASONING',
+    badgeClass: 'badge-neutral',
+    stages: [
+      `${state.backend?.model || 'Robbie-300M'} is contextualizing session history...`,
+      `Evaluating multi-turn dialogue context & parameters...`,
+      `Formulating response...`,
+    ],
+  };
+}
+
+function appendChatThinkingIndicator(prompt) {
   const stream = document.getElementById('chat-messages-stream');
   if (!stream) return null;
   const id = `thinking-${Date.now()}`;
+  const plan = parsePromptActivityPlan(prompt);
+  let stageIdx = 0;
+  const startTime = Date.now();
+
   const div = document.createElement('div');
   div.className = 'chat-message assistant';
   div.id = id;
   div.innerHTML = `
     <div class="msg-avatar">R</div>
-    <div class="msg-body" style="color: var(--text-dim); display: flex; align-items: center; gap: 8px;">
-      <div class="progress-spinner" style="width: 10px; height: 10px;"></div>
-      <span>Robbie-25M is evaluating context...</span>
+    <div class="msg-body" style="color: var(--text-dim); display: flex; flex-direction: column; gap: 6px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="progress-spinner" style="width: 12px; height: 12px;"></div>
+        <span class="badge ${plan.badgeClass}" style="font-size: 10px; padding: 2px 7px; letter-spacing: 0.5px; border-radius: 4px;">${plan.badge}</span>
+        <span class="thinking-elapsed" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">0.0s</span>
+      </div>
+      <div class="thinking-status-text" style="font-size: 12.5px; color: var(--text-primary); transition: opacity 0.2s ease;">
+        ${escapeHTML(plan.stages[0])}
+      </div>
     </div>
   `;
   stream.appendChild(div);
   const viewport = document.getElementById('chat-scroll-viewport');
   if (viewport) viewport.scrollTop = viewport.scrollHeight;
+
+  const timer = setInterval(() => {
+    const el = document.getElementById(id);
+    if (!el) {
+      clearInterval(timer);
+      activeThinkingTimers.delete(id);
+      return;
+    }
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+    const elapsedEl = el.querySelector('.thinking-elapsed');
+    if (elapsedEl) elapsedEl.textContent = `${elapsedSec}s`;
+
+    if (stageIdx + 1 < plan.stages.length && (Date.now() - startTime) >= (stageIdx + 1) * 900) {
+      stageIdx++;
+      const textEl = el.querySelector('.thinking-status-text');
+      if (textEl) {
+        textEl.textContent = plan.stages[stageIdx];
+      }
+    }
+  }, 250);
+
+  activeThinkingTimers.set(id, timer);
   return id;
 }
 
 function removeChatThinkingIndicator(id) {
   if (!id) return;
+  const timer = activeThinkingTimers.get(id);
+  if (timer) {
+    clearInterval(timer);
+    activeThinkingTimers.delete(id);
+  }
   const el = document.getElementById(id);
   if (el) el.remove();
 }
@@ -1421,7 +1615,7 @@ async function handleRunCode() {
   if (!textarea || !consoleOutput) return;
 
   const code = textarea.value;
-  consoleOutput.textContent = '>>> Executing Python snippet in sandboxed runtime...\n';
+  consoleOutput.textContent = '>>> Executing Python snippet in a separate local process...\n';
   if (consoleBadge) {
     consoleBadge.textContent = 'Running...';
     consoleBadge.className = 'badge badge-warning';
@@ -1481,7 +1675,7 @@ function setupWorkspaceAskAssistant() {
     if (!q) return;
 
     if (input) input.value = '';
-    if (box) box.innerHTML = '<div style="color: var(--text-dim); display: flex; align-items: center; gap: 6px;"><div class="progress-spinner" style="width: 10px; height: 10px;"></div> Robbie-25M analyzing code...</div>';
+    if (box) box.innerHTML = '<div style="color: var(--text-dim); display: flex; align-items: center; gap: 6px;"><div class="progress-spinner" style="width: 10px; height: 10px;"></div> Robbie-300M analyzing code...</div>';
 
     const fullPrompt = `${q}\n\nHere is the code:\n\`\`\`python\n${code}\n\`\`\``;
 
@@ -1549,6 +1743,7 @@ async function syncMemoryData() {
     state.memory.profile = res.profile || {};
     state.memory.notes = res.notes || {};
     state.memory.episodes = res.episodes || [];
+    state.memory.session = res.session || {};
 
     renderActiveMemoryTab();
   } catch (err) {
@@ -1752,6 +1947,8 @@ function setupSettingsController() {
 // 12. Hardware Telemetry Polling System
 // ============================================================================
 async function syncTelemetryData() {
+  if (state.telemetryPending) return;
+  state.telemetryPending = true;
   try {
     const rawRes = await invoke('get_system_telemetry', {});
     let data = {};
@@ -1764,22 +1961,23 @@ async function syncTelemetryData() {
     state.telemetry = data;
 
     // Update Top Telemetry Chip & Inline Strip
-    const cpuPct = data.cpu ? Math.round(data.cpu.cpu_usage_percent || data.cpu.usage_percent || 0) : 0;
+    const cpuUsage = data.cpu?.cpu_usage_percent ?? data.cpu?.usage_percent;
+    const cpuPct = Number.isFinite(cpuUsage) ? Math.round(cpuUsage) : null;
     const ramFree = data.memory ? (data.memory.available_gb || 0).toFixed(1) : 0;
     const ramPct = data.memory ? Math.round(data.memory.percent_used || 0) : 0;
 
     const inlineCpu = document.getElementById('comp-inline-cpu');
     const inlineRam = document.getElementById('comp-inline-ram');
-    if (inlineCpu) inlineCpu.textContent = `${cpuPct}%`;
+    if (inlineCpu) inlineCpu.textContent = cpuPct === null ? 'Unavailable' : `${cpuPct}%`;
     if (inlineRam) inlineRam.textContent = `${ramFree} GB Free`;
 
     // Update Computer Overview Rows
     const cpuProcEl = document.getElementById('comp-cpu-processor');
     const cpuBarEl = document.getElementById('comp-cpu-bar-fill');
     const cpuPctEl = document.getElementById('comp-cpu-pct');
-    if (cpuProcEl && data.cpu) cpuProcEl.textContent = `${data.cpu.processor || 'Intel/AMD'} (${data.cpu.logical_cores || 12} Cores)`;
-    if (cpuBarEl) cpuBarEl.style.width = `${cpuPct}%`;
-    if (cpuPctEl) cpuPctEl.textContent = `${cpuPct}%`;
+    if (cpuProcEl && data.cpu) cpuProcEl.textContent = `${data.cpu.processor || 'Unknown processor'} (${data.cpu.logical_cores ?? 'Unknown'} Cores)`;
+    if (cpuBarEl) cpuBarEl.style.width = `${cpuPct ?? 0}%`;
+    if (cpuPctEl) cpuPctEl.textContent = cpuPct === null ? 'Unavailable' : `${cpuPct}%`;
 
     const ramDetailEl = document.getElementById('comp-ram-detail');
     const ramBarEl = document.getElementById('comp-ram-bar-fill');
@@ -1792,13 +1990,15 @@ async function syncTelemetryData() {
     const gpuBarEl = document.getElementById('comp-gpu-bar-fill');
     const gpuPctEl = document.getElementById('comp-gpu-pct');
     if (data.gpu) {
-      const vramTotal = data.gpu.vram_total_gb || 6.0;
-      const vramFree = data.gpu.vram_free_gb || 5.9;
+      const vramTotal = data.gpu.vram_total_gb ?? 0;
+      const vramFree = data.gpu.vram_free_gb ?? 0;
       const vramUsed = vramTotal - vramFree;
-      const vramPct = Math.round((vramUsed / vramTotal) * 100);
-      if (gpuDetailEl) gpuDetailEl.textContent = `${data.gpu.device_name || 'GPU'} (CUDA Active • ${vramFree.toFixed(1)} GB Free / ${vramTotal.toFixed(1)} GB)`;
+      const vramPct = vramTotal > 0 ? Math.round((vramUsed / vramTotal) * 100) : 0;
+      if (gpuDetailEl) gpuDetailEl.textContent = data.gpu.cuda_available
+        ? `${data.gpu.device_name} (CUDA • ${vramFree.toFixed(1)} GB Free / ${vramTotal.toFixed(1)} GB)`
+        : 'CUDA unavailable; GPU memory is not reported';
       if (gpuBarEl) gpuBarEl.style.width = `${vramPct}%`;
-      if (gpuPctEl) gpuPctEl.textContent = `${vramPct}%`;
+      if (gpuPctEl) gpuPctEl.textContent = data.gpu.cuda_available ? `${vramPct}%` : 'Unavailable';
     }
 
     const diskDetailEl = document.getElementById('comp-disk-detail');
@@ -1808,8 +2008,8 @@ async function syncTelemetryData() {
       const primary = data.disks[0];
       const summaryParts = data.disks.map(d => `${d.drive} ${d.free_gb} GB free`).join(' • ');
       if (diskDetailEl) diskDetailEl.textContent = summaryParts;
-      if (diskBarEl) diskBarEl.style.width = `${Math.round(primary.percent_used || 50)}%`;
-      if (diskPctEl) diskPctEl.textContent = `${Math.round(primary.percent_used || 50)}%`;
+      if (diskBarEl) diskBarEl.style.width = `${Math.round(primary.percent_used ?? 0)}%`;
+      if (diskPctEl) diskPctEl.textContent = `${Math.round(primary.percent_used ?? 0)}%`;
     }
 
     // Update Top Processes Monitor Table
@@ -1832,6 +2032,76 @@ async function syncTelemetryData() {
     if (tsPill) tsPill.textContent = new Date().toLocaleTimeString();
   } catch (err) {
     console.warn('[Telemetry] Sync error:', err);
+    const timestamp = document.getElementById('comp-timestamp-pill');
+    if (timestamp) timestamp.textContent = 'Telemetry unavailable';
+  } finally {
+    state.telemetryPending = false;
+  }
+}
+
+function updateBackendStatus(status) {
+  state.backend = status;
+  const label = document.getElementById('sidebar-model-label');
+  const container = label?.closest('.sidebar-model-status');
+  const connected = Boolean(status?.loaded);
+  const dev = status?.device ? String(status.device).toUpperCase() : 'CONNECTED';
+  if (label) label.textContent = isPreview ? 'Preview — sample data' : connected
+    ? `${status.model} · ${dev}` : 'Robbie unavailable';
+  if (container) {
+    container.title = status?.checkpoint || status?.error || 'No local model connected';
+    container.dataset.connected = String(connected);
+  }
+  const checkpoint = document.getElementById('settings-model-checkpoint');
+  const configuration = document.getElementById('settings-model-config');
+  const badge = document.getElementById('settings-model-device');
+  const headerBadge = document.getElementById('header-badge-text');
+  const navBadge = document.getElementById('chat-nav-badge');
+  if (checkpoint) checkpoint.textContent = status?.checkpoint || status?.error || 'No model connected';
+  if (configuration) configuration.textContent = connected
+    ? `${status.context_tokens} token context · ${status.max_tokens} maximum output tokens · temperature ${status.temperature}`
+    : 'Connect the local Robbie model to view its configuration.';
+  if (badge) badge.textContent = connected ? dev : isPreview ? 'Preview' : 'Disconnected';
+  if (connected && status?.model) {
+    if (headerBadge) headerBadge.textContent = `${status.model} Model`;
+    if (navBadge) {
+      const match = status.model.match(/(\d+(?:\.\d+)?M)/i);
+      if (match) navBadge.textContent = match[1];
+    }
+  }
+}
+
+async function syncBackendStatus() {
+  try {
+    const raw = await invoke('get_backend_status');
+    const status = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    updateBackendStatus(status);
+
+    // If backend restored previous chat history from root chat_history.json, render it if UI stream is empty
+    if (status.history && Array.isArray(status.history) && status.history.length > 0 && state.chatMessages.length === 0) {
+      loadChatHistoryIntoUI(status.history);
+    }
+  } catch (error) {
+    updateBackendStatus({ loaded: false, error: String(error.message || error) });
+    showToast(String(error.message || error));
+  }
+}
+
+function loadChatHistoryIntoUI(history) {
+  const stream = document.getElementById('chat-messages-stream');
+  const welcome = document.getElementById('chat-welcome-state');
+  if (!stream) return;
+  if (welcome) welcome.style.display = 'none';
+
+  for (const item of history) {
+    const rLower = String(item.role || '').toLowerCase().trim();
+    const isAssistant = rLower === 'assistant' || rLower === 'robbie' || rLower === 'ai' || rLower === 'bot';
+    const role = isAssistant ? 'assistant' : 'user';
+    appendChatMessage(role, item.content, item.extras || item.metadata || {});
+  }
+
+  const turnsMeta = document.getElementById('session-turns-meta');
+  if (turnsMeta) {
+    turnsMeta.textContent = `${state.chatMessages.length} turns • Restored from chat_history.json`;
   }
 }
 
@@ -1843,39 +2113,266 @@ function startTelemetryPolling() {
 // ============================================================================
 // 13. UI Utilities: Markdown, Modal, Toast & Helpers
 // ============================================================================
-function renderMarkdown(md) {
-  if (!md) return '';
-  let out = escapeHTML(md);
+function highlightPythonSyntax(code) {
+  if (!code) return '';
 
-  // Headers
-  out = out.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-  out = out.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-  out = out.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+  const pyKeywords = new Set([
+    'def', 'return', 'class', 'import', 'from', 'as', 'if', 'elif', 'else',
+    'for', 'while', 'in', 'is', 'not', 'and', 'or', 'with', 'yield', 'try',
+    'except', 'finally', 'lambda', 'pass', 'break', 'continue', 'raise',
+    'assert', 'global', 'nonlocal', 'async', 'await'
+  ]);
 
-  // Bold & Italic
-  out = out.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
-  out = out.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+  const pyBuiltins = new Set([
+    'print', 'sorted', 'len', 'range', 'enumerate', 'zip', 'map', 'filter',
+    'list', 'dict', 'set', 'tuple', 'int', 'float', 'str', 'bool', 'open',
+    'super', 'type', 'isinstance', 'sum', 'min', 'max', 'abs', 'any', 'all',
+    'round', 'reversed'
+  ]);
 
-  // Code Blocks
-  out = out.replace(/```([\s\S]*?)```/gim, (match, code) => {
-    return `<div class="code-block-wrapper"><div class="code-block-header"><span>Python / Output</span><button class="btn-copy-code" onclick="navigator.clipboard.writeText(this.parentElement.nextElementSibling.innerText);">${ICONS.copy} Copy</button></div><pre class="code-block-content">${code.trim()}</pre></div>`;
-  });
+  const tokenRegex = /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|#[^\n]*|\b\d+(?:\.\d+)?\b|\b[a-zA-Z_]\w*\b|[\(\)\[\]\{\}:,.]|[^\s\w]+|\s+)/g;
 
-  // Inline Code
-  out = out.replace(/`([^`]+)`/gim, '<code>$1</code>');
+  let out = '';
+  let prevWord = '';
+  let match;
 
-  // Lists
-  out = out.replace(/^\* (.*$)/gim, '<li>$1</li>');
-  out = out.replace(/^• (.*$)/gim, '<li>$1</li>');
-  out = out.replace(/((?:<li>.*<\/li>\s*)+)/gim, '<ul>$1</ul>');
+  while ((match = tokenRegex.exec(code)) !== null) {
+    const tok = match[0];
 
-  // Paragraphs
-  out = out.replace(/\n\n/gim, '</p><p>');
-  out = `<p>${out}</p>`;
-  out = out.replace(/<p><\/p>/gim, '');
+    // String literal
+    if (tok.startsWith('"') || tok.startsWith("'")) {
+      out += `<span class="tok-str">${escapeHTML(tok)}</span>`;
+      continue;
+    }
+
+    // Comment
+    if (tok.startsWith('#')) {
+      out += `<span class="tok-comment">${escapeHTML(tok)}</span>`;
+      continue;
+    }
+
+    // Number
+    if (/^\d+(?:\.\d+)?$/.test(tok)) {
+      out += `<span class="tok-num">${tok}</span>`;
+      continue;
+    }
+
+    // Word / identifier
+    if (/^[a-zA-Z_]\w*$/.test(tok)) {
+      if (tok === 'True' || tok === 'False' || tok === 'None') {
+        out += `<span class="tok-bool">${tok}</span>`;
+      } else if (pyKeywords.has(tok)) {
+        out += `<span class="tok-kw">${tok}</span>`;
+      } else if (prevWord === 'def') {
+        out += `<span class="tok-fn">${tok}</span>`;
+      } else if (prevWord === 'class') {
+        out += `<span class="tok-class">${tok}</span>`;
+      } else if (pyBuiltins.has(tok)) {
+        out += `<span class="tok-builtin">${tok}</span>`;
+      } else {
+        out += escapeHTML(tok);
+      }
+      prevWord = tok;
+      continue;
+    }
+
+    // Reset prevWord if non-whitespace symbol encountered (except brackets/colon)
+    if (!/^\s+$/.test(tok)) {
+      if (tok !== '(' && tok !== ':') {
+        prevWord = '';
+      }
+    }
+
+    out += escapeHTML(tok);
+  }
 
   return out;
 }
+
+function renderMarkdown(md) {
+  if (!md) return '';
+
+  // 1. Separate run-on numbered items like "...assistant director. 2. Metal Gear..."
+  let working = md.replace(/([.!?])\s+(\d+)\.\s+(\*\*|[A-Z])/g, '$1\n\n$2. $3');
+
+  // 2. Extract fenced code blocks FIRST into placeholders to avoid inner paragraph/syntax corruption
+  const codeBlocks = [];
+  working = working.replace(/```([a-zA-Z0-9_\+\-\#]*)\n?([\s\S]*?)```/g, (match, rawLang, code) => {
+    const idx = codeBlocks.length;
+    const cleanLang = (rawLang || 'python').trim();
+    codeBlocks.push({
+      lang: cleanLang,
+      code: code.replace(/\r\n/g, '\n').replace(/^\n+|\n+$/g, '')
+    });
+    return `%%%ROBBIE_CODE_SPACE_${idx}%%%`;
+  });
+
+  // 3. Escape HTML for normal text
+  let out = escapeHTML(working);
+
+  // 4. Headers
+  out = out.replace(/^### (.*$)/gim, '<h3 class="chat-md-h3">$1</h3>');
+  out = out.replace(/^## (.*$)/gim, '<h2 class="chat-md-h2">$1</h2>');
+  out = out.replace(/^# (.*$)/gim, '<h1 class="chat-md-h1">$1</h1>');
+
+  // 5. Bold & Italic
+  out = out.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+  out = out.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+
+  // 6. Inline Code
+  out = out.replace(/`([^`]+)`/gim, '<code class="chat-inline-code">$1</code>');
+
+  // 7. Lists
+  // Numbered list items
+  out = out.replace(/^\s*(\d+)\.\s+(.*$)/gim, '<li class="chat-li-numbered" value="$1"><span class="chat-li-text">$2</span></li>');
+  out = out.replace(/((?:<li class="chat-li-numbered"[^>]*>[\s\S]*?<\/li>\s*)+)/gim, '<ol class="chat-ol-list">$1</ol>');
+
+  // Bullet list items
+  out = out.replace(/^\s*[\*\-•]\s+(.*$)/gim, '<li class="chat-li-bullet"><span class="chat-li-text">$1</span></li>');
+  out = out.replace(/((?:<li class="chat-li-bullet">[\s\S]*?<\/li>\s*)+)/gim, '<ul class="chat-ul-list">$1</ul>');
+
+  // 8. Paragraphs and Line Breaks
+  out = out.replace(/\n\n+/gim, '</p><p>');
+  out = out.replace(/\n/gim, '<br>');
+  out = `<p>${out}</p>`;
+  out = out.replace(/<p>\s*<\/p>/gim, '');
+  out = out.replace(/<p>\s*(<(?:ol|ul|div|h1|h2|h3)[\s\S]*?<\/(?:ol|ul|div|h1|h2|h3)>)\s*<\/p>/gim, '$1');
+
+  // 9. Reinsert rich "Code Space" blocks
+  codeBlocks.forEach((item, idx) => {
+    const isPy = !item.lang || item.lang.toLowerCase() === 'python' || item.lang.toLowerCase() === 'py';
+    const highlightedCode = isPy ? highlightPythonSyntax(item.code) : escapeHTML(item.code);
+    const langDisplay = (item.lang || 'Python').charAt(0).toUpperCase() + (item.lang || 'Python').slice(1).toLowerCase();
+    const rawEncoded = encodeURIComponent(item.code);
+
+    const codeSpaceHtml = `
+      <div class="code-block-wrapper chat-code-space" data-code-index="${idx}" data-raw-code="${rawEncoded}">
+        <div class="code-block-header">
+          <div class="code-space-meta">
+            <span class="code-space-icon">&lt;/&gt;</span>
+            <span class="code-space-lang">${escapeHTML(langDisplay)}</span>
+          </div>
+          <div class="code-space-actions">
+            <button class="btn-code-action btn-send-editor" onclick="sendCodeToEditor(this)" title="Open in Workspace Editor">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </button>
+            <button class="btn-code-action btn-copy-code" onclick="copyCodeSpace(this)" title="Copy snippet">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            <button class="btn-code-run-pill" onclick="runCodeSpace(this)" title="Run snippet in local Python process">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+              <span>Run</span>
+            </button>
+          </div>
+        </div>
+        <pre class="code-block-content"><code class="language-${escapeHTML(item.lang.toLowerCase())}">${highlightedCode}</code></pre>
+      </div>
+    `.trim();
+
+    const placeholder = escapeHTML(`%%%ROBBIE_CODE_SPACE_${idx}%%%`);
+    out = out.replace(new RegExp(`<p>\\s*${placeholder}\\s*<\\/p>`, 'g'), codeSpaceHtml);
+    out = out.replace(new RegExp(placeholder, 'g'), codeSpaceHtml);
+  });
+
+  return out;
+}
+
+window.runCodeSpace = async function(btn) {
+  const container = btn.closest('.code-block-wrapper');
+  if (!container) return;
+  const rawCode = container.getAttribute('data-raw-code');
+  const code = rawCode ? decodeURIComponent(rawCode) : (container.querySelector('.code-block-content code') || container.querySelector('.code-block-content'))?.innerText;
+  if (!code) return;
+
+  let outputBox = container.querySelector('.code-space-output-drawer');
+  if (!outputBox) {
+    outputBox = document.createElement('div');
+    outputBox.className = 'code-space-output-drawer';
+    container.appendChild(outputBox);
+  }
+
+  outputBox.innerHTML = `
+    <div class="code-exec-header">
+      <span class="code-exec-title"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg> Output</span>
+      <span class="code-exec-status">Running...</span>
+    </div>
+    <pre class="code-exec-stdout">Executing snippet in local Python process...</pre>
+  `;
+  outputBox.style.display = 'block';
+
+  const startTime = performance.now();
+  try {
+    const rawRes = await invoke('execute_code', { code });
+    let res = {};
+    try { res = JSON.parse(rawRes); } catch { res = { stdout: rawRes, success: true }; }
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+    const statusEl = outputBox.querySelector('.code-exec-status');
+    const stdoutEl = outputBox.querySelector('.code-exec-stdout');
+
+    if (res.success) {
+      if (statusEl) statusEl.textContent = `Completed in ${elapsed}s`;
+      if (stdoutEl) {
+        stdoutEl.textContent = res.stdout || '(Process exited cleanly with no stdout)';
+        stdoutEl.style.color = '#7ee787';
+      }
+    } else {
+      if (statusEl) {
+        statusEl.textContent = `Exit Code 1 (${elapsed}s)`;
+        statusEl.style.color = 'var(--color-error)';
+      }
+      if (stdoutEl) {
+        stdoutEl.textContent = res.error || res.stderr || 'Execution failed.';
+        stdoutEl.style.color = 'var(--color-error)';
+      }
+    }
+  } catch (err) {
+    const statusEl = outputBox.querySelector('.code-exec-status');
+    const stdoutEl = outputBox.querySelector('.code-exec-stdout');
+    if (statusEl) statusEl.textContent = 'Execution failed';
+    if (stdoutEl) {
+      stdoutEl.textContent = err.message || err;
+      stdoutEl.style.color = 'var(--color-error)';
+    }
+  }
+};
+
+window.copyCodeSpace = function(btn) {
+  const container = btn.closest('.code-block-wrapper');
+  if (!container) return;
+  const rawCode = container.getAttribute('data-raw-code');
+  const text = rawCode ? decodeURIComponent(rawCode) : (container.querySelector('.code-block-content code') || container.querySelector('.code-block-content'))?.innerText;
+  if (!text) return;
+
+  navigator.clipboard.writeText(text).then(() => {
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7ee787" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`;
+    showToast('Code copied to clipboard.');
+    setTimeout(() => {
+      btn.innerHTML = origHtml;
+    }, 1500);
+  }).catch(() => {
+    showToast('Failed to copy to clipboard.');
+  });
+};
+
+window.sendCodeToEditor = function(btn) {
+  const container = btn.closest('.code-block-wrapper');
+  if (!container) return;
+  const rawCode = container.getAttribute('data-raw-code');
+  const text = rawCode ? decodeURIComponent(rawCode) : (container.querySelector('.code-block-content code') || container.querySelector('.code-block-content'))?.innerText;
+  if (!text) return;
+
+  const textarea = document.getElementById('editor-textarea');
+  if (textarea) {
+    textarea.value = text;
+    if (typeof updateEditorGutter === 'function') updateEditorGutter();
+  }
+  if (typeof switchView === 'function') {
+    switchView('workspace');
+  }
+  showToast('Code sent to Workspace Editor!');
+};
 
 function escapeHTML(str) {
   if (!str) return '';

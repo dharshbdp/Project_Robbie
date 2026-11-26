@@ -1,83 +1,11 @@
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+mod bridge;
 
-/// Locate the Python interpreter associated with Project Robbie (.venv).
-fn find_python_executable() -> PathBuf {
-    let candidates = [
-        "../../.venv/Scripts/python.exe",
-        "../.venv/Scripts/python.exe",
-        ".venv/Scripts/python.exe",
-        "../../.venv/bin/python",
-        "../.venv/bin/python",
-    ];
-
-    for c in &candidates {
-        let p = Path::new(c);
-        if p.exists() {
-            if let Ok(canon) = p.canonicalize() {
-                return canon;
-            }
-            return p.to_path_buf();
-        }
-    }
-
-    PathBuf::from("python")
-}
-
-/// Locate the bridge script path.
-fn find_bridge_script() -> PathBuf {
-    let candidates = [
-        "../bridge.py",
-        "editor/bridge.py",
-        "./bridge.py",
-    ];
-
-    for c in &candidates {
-        let p = Path::new(c);
-        if p.exists() {
-            if let Ok(canon) = p.canonicalize() {
-                return canon;
-            }
-            return p.to_path_buf();
-        }
-    }
-
-    PathBuf::from("editor/bridge.py")
-}
-
-/// Execute a bridge command with JSON payload piped to stdin.
-fn invoke_bridge(subcmd: &str, payload_json: &str) -> Result<String, String> {
-    let python = find_python_executable();
-    let bridge = find_bridge_script();
-
-    let mut child = Command::new(&python)
-        .arg(&bridge)
-        .arg(subcmd)
-        .arg("-")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn Python process {:?}: {}", python, e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(payload_json.as_bytes())
-            .map_err(|e| format!("Failed to write to Python stdin: {}", e))?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("Failed to read Python process output: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Bridge execution failed (code {:?}): {}", output.status.code(), stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout.trim().to_string())
+async fn invoke_bridge(command: &str, payload: &str) -> Result<String, String> {
+    let command = command.to_owned();
+    let payload = payload.to_owned();
+    tauri::async_runtime::spawn_blocking(move || bridge::invoke(&command, &payload))
+        .await
+        .map_err(|error| format!("Robbie connection task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -86,23 +14,33 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-fn ask_robbie(prompt: String) -> Result<String, String> {
+async fn ask_robbie(prompt: String) -> Result<String, String> {
     let payload = serde_json::json!({ "message": prompt }).to_string();
-    invoke_bridge("chat", &payload)
+    invoke_bridge("chat", &payload).await
 }
 
 #[tauri::command]
-fn get_system_telemetry() -> Result<String, String> {
-    invoke_bridge("system", "{}")
+async fn get_system_telemetry() -> Result<String, String> {
+    invoke_bridge("system", "{}").await
 }
 
 #[tauri::command]
-fn get_memory_profile() -> Result<String, String> {
-    invoke_bridge("memory", "{}")
+async fn get_memory_profile() -> Result<String, String> {
+    invoke_bridge("memory", "{}").await
 }
 
 #[tauri::command]
-fn manage_memory(
+async fn get_backend_status() -> Result<String, String> {
+    invoke_bridge("status", "{}").await
+}
+
+#[tauri::command]
+async fn reset_chat() -> Result<String, String> {
+    invoke_bridge("reset", "{}").await
+}
+
+#[tauri::command]
+async fn manage_memory(
     action: Option<String>,
     key: Option<String>,
     value: Option<String>,
@@ -115,31 +53,32 @@ fn manage_memory(
         "value": value,
         "title": title,
         "content": content
-    }).to_string();
-    invoke_bridge("memory", &payload)
+    })
+    .to_string();
+    invoke_bridge("memory", &payload).await
 }
 
 #[tauri::command]
-fn run_research(topic: String) -> Result<String, String> {
+async fn run_research(topic: String) -> Result<String, String> {
     let payload = serde_json::json!({ "topic": topic }).to_string();
-    invoke_bridge("research", &payload)
+    invoke_bridge("research", &payload).await
 }
 
 #[tauri::command]
-fn execute_code(code: String) -> Result<String, String> {
+async fn execute_code(code: String) -> Result<String, String> {
     let payload = serde_json::json!({ "code": code }).to_string();
-    invoke_bridge("execute", &payload)
+    invoke_bridge("execute", &payload).await
 }
 
 #[tauri::command]
-fn launch_app(app: String) -> Result<String, String> {
+async fn launch_app(app: String) -> Result<String, String> {
     let payload = serde_json::json!({ "app": app }).to_string();
-    invoke_bridge("launch", &payload)
+    invoke_bridge("launch", &payload).await
 }
 
 #[tauri::command]
 #[allow(non_snake_case)]
-fn run_diagnostic(
+async fn run_diagnostic(
     diag_type: Option<String>,
     diagType: Option<String>,
     query: Option<String>,
@@ -151,23 +90,36 @@ fn run_diagnostic(
     let payload = serde_json::json!({
         "query": target,
         "type": target
-    }).to_string();
-    invoke_bridge("diagnose", &payload)
+    })
+    .to_string();
+    invoke_bridge("diagnose", &payload).await
 }
 
 #[tauri::command]
-fn browse_files(action: String, path: String, pattern: Option<String>) -> Result<String, String> {
+async fn browse_files(
+    action: String,
+    path: String,
+    pattern: Option<String>,
+) -> Result<String, String> {
     let payload = serde_json::json!({
         "action": action,
         "path": path,
         "pattern": pattern.unwrap_or_else(|| "*".to_string())
-    }).to_string();
-    invoke_bridge("files", &payload)
+    })
+    .to_string();
+    invoke_bridge("files", &payload).await
 }
 
 #[tauri::command]
-fn read_project_file(file_path: String) -> Result<String, String> {
-    std::fs::read_to_string(&file_path).map_err(|e| format!("Could not read file {}: {}", file_path, e))
+async fn read_project_file(file_path: String) -> Result<String, String> {
+    let payload = serde_json::json!({"action": "read", "path": file_path}).to_string();
+    let raw = invoke_bridge("files", &payload).await?;
+    let result: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    result["content"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or("The file could not be read".into())
 }
 
 #[tauri::command]
@@ -184,6 +136,8 @@ pub fn run() {
             ask_robbie,
             get_system_telemetry,
             get_memory_profile,
+            get_backend_status,
+            reset_chat,
             manage_memory,
             run_research,
             execute_code,

@@ -453,3 +453,35 @@ class TestResearchAccuracyAndValidation:
         assert "All rights reserved" not in text
         assert "Causal transformers use lower-triangular attention masks" in text
 
+    def test_answer_query_summarizes_facts_with_citations(self):
+        assistant = ResearchAssistant()
+        assistant.search_engine = MagicMock()
+        assistant.scraper = MagicMock()
+
+        assistant.search_engine.search.return_value = [
+            SearchResult(
+                title="2026 Gaming Releases",
+                url="https://example.com/games2026",
+                snippet="Notable 2026 releases include Resident Evil Requiem and Forza Horizon 6 hitting store shelves.",
+                source="web",
+            ),
+            SearchResult(
+                title="Upcoming Video Games",
+                url="https://example.com/upcoming",
+                snippet="GTA 6 is scheduled to launch later this year with record anticipation.",
+                source="web",
+            ),
+        ]
+        assistant.scraper.fetch.return_value = WebpageDocument(
+            url="https://example.com/games2026",
+            title="2026 Gaming Releases",
+            text="2026 brings titles like Resident Evil Requiem and Forza Horizon 6 to all major consoles.",
+            char_count=90,
+        )
+
+        reply = assistant.answer_query("what are the new games that relesed?")
+        assert ("Resident Evil Requiem" in reply or "Forza Horizon 6" in reply or "GTA 6" in reply)
+        assert "**Sources:**" in reply
+        assert "[2026 Gaming Releases](https://example.com/games2026)" in reply
+
+

@@ -134,9 +134,43 @@ class TestConversationContext:
             assert loaded.slots.get("user_name") == "Dharsh"
             assert loaded.messages[0].content == "My name is Dharsh"
 
+    def test_history_search_and_recent_turns(self):
+        tok = CharTokenizer()
+        tok.train(["User: Robbie: saxophone piano music"])
+        ctx = ConversationContext(tokenizer=tok)
+        ctx.add_user_message("Who invented the saxophone?")
+        ctx.add_assistant_message("Adolphe Sax invented the saxophone.")
+        ctx.add_user_message("What about the piano?")
+        ctx.add_assistant_message("Bartolomeo Cristofori invented the piano.")
+
+        # Test search_history
+        results = ctx.search_history("saxophone")
+        assert len(results) > 0
+        assert "saxophone" in results[0][0].content.lower()
+
+        # Test get_recent_turns
+        recent = ctx.get_recent_turns(2)
+        assert len(recent) == 2
+        assert "piano" in recent[0].content.lower()
+        assert "piano" in recent[1].content.lower()
+
 
 class TestChatEngine:
     """Test ChatEngine commands and response generation."""
+
+    def test_previous_question_retrieval(self):
+        mock_model = MagicMock()
+        tok = CharTokenizer()
+        tok.train(["User: Robbie: Who invented the saxophone? what was my previous question?"])
+        engine = ChatEngine(model=mock_model, tokenizer=tok, device=torch.device("cpu"))
+
+        # User asks first question
+        engine.context.add_user_message("Who invented the saxophone?")
+        engine.context.add_assistant_message("Adolphe Sax invented the saxophone.")
+
+        # User asks to recall previous question
+        recall_reply = engine.respond("what was my previous question?")
+        assert 'Who invented the saxophone?' in recall_reply
 
     def test_slash_commands(self):
         mock_model = MagicMock()

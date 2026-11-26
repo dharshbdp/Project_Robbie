@@ -2,7 +2,57 @@
 
 **Robbie Studio** is the official desktop environment and code editor for **Project Robbie**, built with **Tauri v2** and a high-performance **Obsidian Glass Vanilla CSS/JS** frontend.
 
-It connects directly to Robbie's trained **25M Conversational Transformer**, **Computer Awareness (Hardware Telemetry)**, **Persistent Memory Storage**, and **Autonomous Web Research Engine**.
+It connects to Robbie's trained local model, computer telemetry, memory, and research tools through one persistent Python worker. The model is loaded once and the conversation is retained between messages.
+
+## Local connection
+
+From the project root in PowerShell:
+
+```powershell
+.\launch_editor.bat
+```
+
+The launcher installs the locked Node dependencies if needed. The first native
+build also needs Rust and the Windows C++ build tools. The project `.venv` must
+contain PyTorch and Robbie's dependencies.
+
+The editor automatically selects the most recently saved
+`checkpoints/answers_*/best_answers.pt`, then falls back to a trained stage-2
+checkpoint. It never creates an untrained random model as a fallback. Settings
+show the actual checkpoint, device, and model context length.
+
+To select a checkpoint explicitly before launching:
+
+```powershell
+$env:ROBBIE_CHECKPOINT = 'checkpoints\answers_25m_20261013_084853\best_answers.pt'
+.\launch_editor.bat
+```
+
+`ROBBIE_PROJECT_DIR` can locate the checkout when running the built executable
+from another directory, and `ROBBIE_PYTHON` can select another Python interpreter.
+The current desktop build requires that local checkout and Python environment;
+it does not bundle model weights or Python into an independent installer.
+
+Chat uses the existing `ChatEngine`, including its current deterministic tool
+routes. This integration does not make tool selection learned. New Chat clears
+the backend conversation while retaining persistent memory. Scratchpad Python
+runs in a separate process with a 30-second limit; it is local code execution,
+not a filesystem sandbox. CPU utilization is shown as unavailable when the
+backend does not provide that measurement.
+
+Opening the HTML in an ordinary browser shows a disconnected state. Sample
+responses require an explicit `?preview=1` URL and are labelled as preview data.
+
+Connection checks:
+
+```powershell
+.\.venv\Scripts\python.exe editor\bridge.py status
+.\.venv\Scripts\python.exe -m pytest tests\test_editor_bridge.py -q
+cd editor
+npm.cmd test
+cd src-tauri
+cargo test --locked --offline --lib
+```
 
 ---
 
@@ -99,4 +149,4 @@ The compiled `.exe` installer will be generated under `editor/src-tauri/target/r
 3. **One-Click Code Explanation**: Click **"Ask Robbie"** on any code snippet to have Robbie analyze the logic.
 4. **Live System Telemetry**: Monitor hardware stats (CPU cores, RAM usage, Quadro GPU VRAM, Battery, Disks, and Top Processes).
 5. **Grounded Web Research**: Run autonomous queries across Wikipedia and DuckDuckGo with verified citations and multi-source rankings.
-6. **Dual Mode Support**: Works inside Tauri desktop windows or in standard browsers with automatic mock fallbacks during development.
+6. **Explicit Preview Mode**: Browser sample data is available only with `?preview=1`; real model access uses the desktop connection.

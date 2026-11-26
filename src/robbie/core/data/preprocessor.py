@@ -201,7 +201,9 @@ class DatasetPipeline:
 
         return dialogues
 
-    def prepare_stage2_dialogue(self, train_ratio: float = 0.85, force: bool = False) -> Dict[str, Any]:
+    def prepare_stage2_dialogue(
+        self, train_ratio: float = 0.85, force: bool = False, include_slang: bool = False
+    ) -> Dict[str, Any]:
         """Format, clean, and split Stage 2 Conversational & Assistant instruction data."""
         stage2_raw = self.raw_dir / "stage2_dialogue"
         stage2_processed = self.processed_dir / "stage2"
@@ -212,6 +214,7 @@ class DatasetPipeline:
 
         all_conversations: List[str] = []
         source_counts: Dict[str, int] = {}
+        excluded_sources = []
 
         # 1. Load core assistant dialogues (Robbie personality, memory, awareness)
         core_dialogues = self._parse_dialogue_file(raw_dialogue_file)
@@ -231,6 +234,9 @@ class DatasetPipeline:
         if custom_dir.exists():
             for p in sorted(custom_dir.iterdir()):
                 if p.is_file() and p.suffix.lower() in (".jsonl", ".json", ".csv", ".txt") and p.name != "README.md":
+                    if not include_slang and "genz_slang" in p.stem:
+                        excluded_sources.append(f"custom/{p.name}")
+                        continue
                     custom_dialogues = self._parse_dialogue_file(p)
                     if custom_dialogues:
                         all_conversations.extend(custom_dialogues)
@@ -242,11 +248,19 @@ class DatasetPipeline:
         # Deterministically shuffle conversations so topics are balanced across splits
         import random
         rng = random.Random(42)
-        shuffled = list(all_conversations)
+        unique = {}
+        for conversation in all_conversations:
+            cleaned = self.cleaner.clean(conversation)
+            # Case and whitespace variants should not leak into validation.
+            key = " ".join(cleaned.casefold().split())
+            unique.setdefault(key, cleaned)
+        shuffled = list(unique.values())
+        if len(shuffled) < 2:
+            raise ValueError("At least two unique conversations are needed for disjoint splits")
         rng.shuffle(shuffled)
 
         # Split at conversation level (zero conversation leakage between train and val)
-        split_idx = max(1, int(len(shuffled) * train_ratio))
+        split_idx = min(len(shuffled) - 1, max(1, int(len(shuffled) * train_ratio)))
         train_convs = shuffled[:split_idx]
         val_convs = shuffled[split_idx:] if split_idx < len(shuffled) else shuffled[-1:]
 
@@ -273,6 +287,8 @@ class DatasetPipeline:
             "conversations_train": len(train_convs),
             "conversations_val": len(val_convs),
             "sources": source_counts,
+            "excluded_sources": excluded_sources,
+            "conversations_unique": len(shuffled),
             "train": train_stats,
             "val": val_stats,
             "delimiter": DOCUMENT_DELIMITER,

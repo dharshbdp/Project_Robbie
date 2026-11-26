@@ -9,6 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 CHECKPOINT_DIR = PROJECT_ROOT / "checkpoints"
 CONFIG_DIR = PROJECT_ROOT / "configs"
+CHAT_HISTORY_PATH = PROJECT_ROOT / "chat_history.json"
 
 @dataclass
 class RobbieConfig:

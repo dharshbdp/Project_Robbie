@@ -79,13 +79,22 @@ class ConversationContext:
         reserved_generation_tokens: int = 40,
         formatter: Optional[ConversationFormatter] = None,
         persistent_memory: Optional[Any] = None,
+        history_file: Optional[Union[str, Path]] = None,
+        auto_save: bool = True,
+        auto_load: bool = True,
     ):
         self.tokenizer = tokenizer
         self.max_context_tokens = max_context_tokens
         self.reserved_generation_tokens = reserved_generation_tokens
         self.formatter = formatter or ConversationFormatter()
         self.persistent_memory = persistent_memory
+        self.auto_save = auto_save
         self.messages: List[Message] = []
+
+        import os
+        env_hist = os.environ.get("ROBBIE_CHAT_HISTORY_PATH")
+        chosen_hist = history_file or env_hist
+        self.history_file: Optional[Path] = Path(chosen_hist) if chosen_hist else None
 
         # Explicit separation:
         # 1. Ephemeral session context (working memory, clears per session)
@@ -101,6 +110,10 @@ class ConversationContext:
 
         # Live synchronized view
         self.slots = SlotsView(self)
+
+        # Auto-load existing conversation history from root chat_history.json if present
+        if auto_load and self.history_file is not None and self.history_file.is_file():
+            self.load_history()
 
     @property
     def max_prompt_budget(self) -> int:
@@ -169,6 +182,7 @@ class ConversationContext:
                     self.persistent_memory.set(k, v)
 
         self.slots.sync()
+        self.save_history()
         return msg
 
     def add_assistant_message(self, content: str) -> Message:
@@ -176,19 +190,32 @@ class ConversationContext:
         cleaned = content.strip()
         msg = Message(role=Role.ASSISTANT, content=cleaned)
         self.messages.append(msg)
+        self.save_history()
         return msg
 
-    def get_context_prompt(self) -> Tuple[str, List[int]]:
+    def get_context_prompt(self, assistant_eos: bool = True) -> Tuple[str, List[int]]:
         """Format the active conversation into a prompt within token limits.
 
-        Returns:
-            Tuple of (prompt_string, token_ids).
+        Strips raw source URL listings and footnotes from past assistant messages so
+        multi-turn conversational context fits cleanly within the token budget.
         """
+        condensed_messages = []
+        for msg in self.messages:
+            if msg.role == Role.ASSISTANT:
+                content = msg.content
+                # Strip URL sources section for prompt encoding
+                content = re.sub(r"\n+\s*(?:\*\*)?Sources(?:\*\*)?:.*$", "", content, flags=re.DOTALL)
+                content = re.sub(r"https?://\S+", "", content).strip()
+                condensed_messages.append(Message(role=Role.ASSISTANT, content=content))
+            else:
+                condensed_messages.append(msg)
+
         _, prompt, token_ids = self.formatter.fit_to_context_budget(
-            messages=self.messages,
+            messages=condensed_messages,
             tokenizer=self.tokenizer,
             max_prompt_tokens=self.max_prompt_budget,
             include_system_prompt=False,
+            assistant_eos=assistant_eos,
         )
         return prompt, token_ids
 
@@ -270,14 +297,104 @@ class ConversationContext:
 
             return "\n".join(lines)
 
+        # 5. Previous question query
+        if any(pat in q for pat in (
+            "what was my previous question", "what was my last question",
+            "what did i just ask", "what did i ask earlier", "what was my previous message",
+            "what was the last thing i asked", "what did i ask before"
+        )):
+            user_msgs = [m for m in self.messages if m.role == Role.USER]
+            if user_msgs:
+                last_q = user_msgs[-1].content
+                return f"Your previous question was: \"{last_q}\""
+            return "You haven't asked any previous questions yet in this session."
+
         return None
 
-    def clear(self, keep_slots: bool = True, keep_persistent: bool = True) -> None:
+    def save_history(self) -> None:
+        """Save conversation turn history to the root chat_history.json file."""
+        if not self.auto_save or self.history_file is None:
+            return
+        try:
+            self.history_file.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "version": "1.0",
+                "last_updated": time.time(),
+                "turn_count": len(self.messages),
+                "messages": [m.to_dict() for m in self.messages],
+                "session_slots": self.session_slots,
+                "persistent_slots": self.persistent_slots,
+            }
+            with open(self.history_file, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            from robbie.utils.logger import logger
+            logger.warning(f"Could not save chat history to {self.history_file}: {e}")
+
+    def load_history(self) -> bool:
+        """Load conversation turn history from the root chat_history.json file."""
+        if self.history_file is None or not self.history_file.is_file():
+            return False
+        try:
+            with open(self.history_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            raw_msgs = data.get("messages", [])
+            self.messages = [Message.from_dict(m) for m in raw_msgs]
+            if "session_slots" in data and isinstance(data["session_slots"], dict):
+                self.session_slots.update(data["session_slots"])
+            if "persistent_slots" in data and isinstance(data["persistent_slots"], dict):
+                self.persistent_slots.update(data["persistent_slots"])
+            self.slots.sync()
+            return True
+        except Exception as e:
+            from robbie.utils.logger import logger
+            logger.warning(f"Could not load chat history from {self.history_file}: {e}")
+            return False
+
+    def delete_history(self) -> bool:
+        """Delete chat history file from the root directory and clear in-memory turns."""
+        self.messages.clear()
+        self.session_slots = {
+            "session_start_time": time.time(),
+            "current_topic": None,
+        }
+        self.slots.sync()
+        if self.history_file is not None and self.history_file.is_file():
+            try:
+                self.history_file.unlink()
+                return True
+            except Exception as e:
+                from robbie.utils.logger import logger
+                logger.warning(f"Could not delete chat history at {self.history_file}: {e}")
+                return False
+        return True
+
+    def search_history(self, query: str, top_k: int = 3) -> List[Tuple[Message, float]]:
+        """Search past messages in the conversation history by token overlap."""
+        q_tokens = set(re.findall(r"\b\w+\b", query.lower()))
+        if not q_tokens or not self.messages:
+            return []
+        results = []
+        for msg in self.messages:
+            m_tokens = set(re.findall(r"\b\w+\b", msg.content.lower()))
+            overlap = len(q_tokens & m_tokens)
+            if overlap > 0:
+                score = overlap / len(q_tokens)
+                results.append((msg, score))
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:top_k]
+
+    def get_recent_turns(self, n: int = 5) -> List[Message]:
+        """Return the n most recent conversation messages."""
+        return self.messages[-n:] if self.messages else []
+
+    def clear(self, keep_slots: bool = True, keep_persistent: bool = True, delete_file: bool = False) -> None:
         """Clear conversation turn history and session context.
 
         Args:
             keep_slots: Retain slots view.
             keep_persistent: If False, also clears persistent memory on disk.
+            delete_file: If True, also deletes chat_history.json from disk.
         """
         self.messages.clear()
         self.session_slots = {
@@ -291,6 +408,10 @@ class ConversationContext:
                 self.persistent_memory.clear()
 
         self.slots.sync()
+        if delete_file:
+            self.delete_history()
+        else:
+            self.save_history()
 
     @property
     def turn_count(self) -> int:

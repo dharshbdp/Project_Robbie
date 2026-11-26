@@ -32,7 +32,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </span>
             <span class="nav-item-label">Chat</span>
-            <span class="nav-item-badge">25M</span>
+            <span class="nav-item-badge" id="chat-nav-badge">300M</span>
           </button>
 
           <button class="nav-item" data-view="research" title="Autonomous Web Research Workspace">
@@ -73,9 +73,9 @@
             <span class="nav-item-label">Settings</span>
           </button>
 
-          <div class="sidebar-model-status" title="Local Robbie-25M Neural Model Active">
+          <div class="sidebar-model-status" title="Connecting to the local Robbie model" data-connected="false" role="status">
             <span class="status-dot-pulse"></span>
-            <span class="sidebar-model-text" id="sidebar-model-label">Robbie-25M Online</span>
+            <span class="sidebar-model-text" id="sidebar-model-label">Connecting to Robbie…</span>
           </div>
         </div>
       </aside>
@@ -93,7 +93,7 @@
               <span class="crumb-current" id="header-view-title">Chat</span>
             </div>
             <div class="header-context-badge" id="header-context-badge">
-              <span class="badge badge-accent" id="header-badge-text">Robbie-25M Model</span>
+              <span class="badge badge-accent" id="header-badge-text">Robbie-300M Model</span>
             </div>
           </div>
 
@@ -142,7 +142,7 @@
                 <div class="drawer-footer">
                   <button class="btn-text-danger w-full" id="btn-clear-chat-history">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    <span>Clear Current Chat</span>
+                    <span>Delete Chat History</span>
                   </button>
                 </div>
               </aside>
@@ -156,7 +156,7 @@
                     <div class="welcome-avatar-mark">R</div>
                     <h2 class="welcome-heading">Robbie Studio</h2>
                     <p class="welcome-lead">
-                      Local neural AI companion with live computer awareness, deep web research, and sandboxed code execution.
+                      Local neural AI companion with live computer awareness, web research, and a Python workspace.
                     </p>
                     <div class="welcome-hints-row">
                       <button class="hint-pill" data-hint="Why is my CPU or GPU usage high?">
@@ -370,13 +370,13 @@
                       <div class="telemetry-row">
                         <div class="telemetry-row-info">
                           <span class="telemetry-label">Processor</span>
-                          <span class="telemetry-model" id="comp-cpu-processor">Intel64 Family 6 (12 Cores)</span>
+                          <span class="telemetry-model" id="comp-cpu-processor">Waiting for live data…</span>
                         </div>
                         <div class="telemetry-row-stat">
                           <div class="meter-bar-track">
-                            <div class="meter-bar-fill" id="comp-cpu-bar-fill" style="width: 24%;"></div>
+                            <div class="meter-bar-fill" id="comp-cpu-bar-fill" style="width: 0%;"></div>
                           </div>
-                          <span class="telemetry-pct" id="comp-cpu-pct">24%</span>
+                          <span class="telemetry-pct" id="comp-cpu-pct">—</span>
                         </div>
                       </div>
 
@@ -384,13 +384,13 @@
                       <div class="telemetry-row">
                         <div class="telemetry-row-info">
                           <span class="telemetry-label">Memory (RAM)</span>
-                          <span class="telemetry-model" id="comp-ram-detail">18.2 GB Free / 31.7 GB Total</span>
+                          <span class="telemetry-model" id="comp-ram-detail">Waiting for live data…</span>
                         </div>
                         <div class="telemetry-row-stat">
                           <div class="meter-bar-track">
-                            <div class="meter-bar-fill" id="comp-ram-bar-fill" style="width: 42%;"></div>
+                            <div class="meter-bar-fill" id="comp-ram-bar-fill" style="width: 0%;"></div>
                           </div>
-                          <span class="telemetry-pct" id="comp-ram-pct">42%</span>
+                          <span class="telemetry-pct" id="comp-ram-pct">—</span>
                         </div>
                       </div>
 
@@ -398,13 +398,13 @@
                       <div class="telemetry-row">
                         <div class="telemetry-row-info">
                           <span class="telemetry-label">Graphics VRAM</span>
-                          <span class="telemetry-model" id="comp-gpu-detail">Quadro RTX 3000 (CUDA Active • 5.9 GB Free / 6.0 GB)</span>
+                          <span class="telemetry-model" id="comp-gpu-detail">Waiting for live data…</span>
                         </div>
                         <div class="telemetry-row-stat">
                           <div class="meter-bar-track">
-                            <div class="meter-bar-fill" id="comp-gpu-bar-fill" style="width: 15%;"></div>
+                            <div class="meter-bar-fill" id="comp-gpu-bar-fill" style="width: 0%;"></div>
                           </div>
-                          <span class="telemetry-pct" id="comp-gpu-pct">15%</span>
+                          <span class="telemetry-pct" id="comp-gpu-pct">—</span>
                         </div>
                       </div>
 
@@ -412,13 +412,13 @@
                       <div class="telemetry-row">
                         <div class="telemetry-row-info">
                           <span class="telemetry-label">Disks Storage</span>
-                          <span class="telemetry-model" id="comp-disk-detail">C: 50.6 GB free • Z: 170.8 GB free</span>
+                          <span class="telemetry-model" id="comp-disk-detail">Waiting for live data…</span>
                         </div>
                         <div class="telemetry-row-stat">
                           <div class="meter-bar-track">
-                            <div class="meter-bar-fill" id="comp-disk-bar-fill" style="width: 71%;"></div>
+                            <div class="meter-bar-fill" id="comp-disk-bar-fill" style="width: 0%;"></div>
                           </div>
-                          <span class="telemetry-pct" id="comp-disk-pct">71%</span>
+                          <span class="telemetry-pct" id="comp-disk-pct">—</span>
                         </div>
                       </div>
                     </div>
@@ -633,7 +633,7 @@
                     </div>
                   </div>
                   <div class="dev-editor-actions">
-                    <span class="badge badge-neutral" id="editor-sandbox-badge">Sandboxed Python</span>
+                    <span class="badge badge-neutral" id="editor-sandbox-badge">Local Python</span>
                     <button class="btn-primary-sm" id="btn-editor-run" title="Execute Code (Ctrl+Enter)">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                       <span>Run (Ctrl+Enter)</span>
@@ -696,7 +696,7 @@
                   </button>
                 </div>
                 <div class="ask-drawer-body" id="ask-drawer-body">
-                  <p class="ask-intro">Robbie-25M analyzes your code snippet, detects bugs, and suggests optimizations.</p>
+                  <p class="ask-intro">Robbie-300M analyzes your code snippet, detects bugs, and suggests optimizations.</p>
                   <div class="ask-quick-prompts">
                     <button class="pill-btn-xs" data-prompt="Explain what this code does">Explain Code</button>
                     <button class="pill-btn-xs" data-prompt="Are there any bugs or performance issues?">Check Bugs</button>
@@ -817,15 +817,15 @@
                 <div class="settings-group-title">Model & Inference</div>
                 <div class="settings-row">
                   <div class="settings-row-label">
-                    <h5>Robbie-25M Neural Model</h5>
-                    <p>Causal Transformer, 8 Layers, 8 Heads, 512 Embedding Dimension.</p>
+                    <h5>Local Robbie Model</h5>
+                    <p id="settings-model-checkpoint">Connecting to the local checkpoint…</p>
                   </div>
-                  <span class="badge badge-accent">Stage 2 Conversational</span>
+                  <span class="badge badge-accent" id="settings-model-device">Connecting</span>
                 </div>
                 <div class="settings-row">
                   <div class="settings-row-label">
                     <h5>Context Window & Generation</h5>
-                    <p>128 Token Context Block Size, Top-k 25, Temperature 0.7.</p>
+                    <p id="settings-model-config">Reading model configuration…</p>
                   </div>
                   <span class="badge badge-neutral">Bounded Budget</span>
                 </div>

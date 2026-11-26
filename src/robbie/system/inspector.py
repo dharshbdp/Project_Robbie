@@ -37,12 +37,13 @@ class SystemSnapshot:
 
     def to_markdown(self) -> str:
         """Format complete system snapshot into clean, structured Markdown."""
+        cpu_load_str = f", {self.cpu.cpu_usage_percent}% load" if getattr(self.cpu, "cpu_usage_percent", None) is not None else ""
         lines = [
             f"### Computer Awareness Report ({self.timestamp})\n",
             f"**Operating System:** {self.cpu.system} ({self.cpu.architecture})  ",
             f"**Active Window:** `{self.window.title}`\n",
             "#### Hardware Resources",
-            f"* **CPU:** {self.cpu.processor} ({self.cpu.logical_cores} logical cores)",
+            f"* **CPU:** {self.cpu.processor} ({self.cpu.logical_cores} logical cores{cpu_load_str})",
             f"* **RAM:** {self.memory.available_gb} GB free / {self.memory.total_gb} GB total ({self.memory.percent_used}% used)",
         ]
 

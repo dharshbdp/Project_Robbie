@@ -117,15 +117,31 @@ class ResearchSynthesizer:
         "a", "an", "the", "and", "or", "but", "if", "then", "of", "to", "in", "on",
         "for", "with", "at", "by", "from", "as", "is", "are", "was", "were", "be",
         "been", "being", "have", "has", "had", "do", "does", "did", "can", "could",
-        "will", "would", "shall", "should", "what", "which", "who", "whom", "this",
-        "that", "these", "those", "am", "it", "its", "how", "tell", "me", "about"
+        "cant", "cannot", "will", "would", "shall", "should", "what", "which", "who",
+        "whom", "whose", "why", "how", "where", "when", "this", "that", "these",
+        "those", "am", "it", "its", "they", "them", "their", "tell", "me", "about",
+        "please", "explain"
     }
 
     @classmethod
     def tokenize_query(cls, query: str) -> Set[str]:
-        """Extract significant lowercase keywords from user query."""
-        tokens = re.findall(r"\b[A-Za-z0-9_]+\b", query.lower())
-        return {t for t in tokens if len(t) > 1 and t not in cls.STOPWORDS}
+        """Extract significant lowercase keywords from user query with contraction expansion."""
+        q = query.lower()
+        q = re.sub(r"\b(cant|can't)\b", "cannot", q)
+        q = re.sub(r"\b(dont|don't)\b", "do not", q)
+        q = re.sub(r"\b(wont|won't)\b", "will not", q)
+        q = re.sub(r"\b(whats|what's)\b", "what is", q)
+        tokens = re.findall(r"\b[A-Za-z0-9_]+\b", q)
+        keywords = {t for t in tokens if len(t) > 1 and t not in cls.STOPWORDS}
+        expanded = set(keywords)
+        for t in keywords:
+            if t.endswith("s") and len(t) > 3:
+                expanded.add(t[:-1])
+            elif not t.endswith("s"):
+                expanded.add(t + "s")
+            if t in ("fly", "flying", "flew"):
+                expanded.update(["fly", "flying", "flight", "flightless"])
+        return expanded
 
     @classmethod
     def split_sentences(cls, text: str) -> List[str]:
@@ -134,8 +150,18 @@ class ResearchSynthesizer:
         sentences = []
         for s in raw_splits:
             cleaned = s.strip()
+            # Strip bracket citations and footnote markers like [ 1 ], [ a ], [ edit ]
+            cleaned = re.sub(r"^\[\s*([a-z]|\d+|update|edit)\s*\]\s*", "", cleaned)
+            cleaned = re.sub(r"\[\s*([a-z]|\d+|update|edit)\s*\]", "", cleaned)
             # Retain informative sentences of reasonable length
             if 30 <= len(cleaned) <= 300 and not cleaned.startswith("http"):
+                if cleaned.startswith(("^", "↑", "\u2191")) or re.match(r"^\d+\.\s*[\^↑]", cleaned):
+                    continue
+                lower_c = cleaned.lower()
+                if any(junk in lower_c for junk in ("archived from the original", "retrieved from", "external links", "cs1 maint", "{{", "}}", "disambiguation")):
+                    continue
+                if lower_c.startswith(("for other uses, see", "this article is about", "see also", "main article", "table lists", "information regarding")):
+                    continue
                 sentences.append(cleaned)
         return sentences
 

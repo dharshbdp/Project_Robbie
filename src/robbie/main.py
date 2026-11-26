@@ -68,6 +68,14 @@ MODEL_PRESETS = {
         "stage2_ckpt": "stage2_25m_conversational_transformer.pt",
         "name": "Robbie-25M (~25.8 Million parameters)",
     },
+    "50m": {
+        "n_layer": 16,
+        "n_head": 8,
+        "n_embd": 512,
+        "stage1_ckpt": "stage1_50m_base_transformer.pt",
+        "stage2_ckpt": "stage2_50m_conversational_transformer.pt",
+        "name": "Robbie-50M (~51.6 Million parameters)",
+    },
 }
 
 def parse_args():
@@ -77,9 +85,9 @@ def parse_args():
     parser.add_argument(
         "--model-size",
         type=str,
-        default="25m",
-        choices=["prototype", "11m", "25m"],
-        help="Model architecture scale: 'prototype' (~808k), '11m' (~11M), or '25m' (~25.8M) (default: 25m)",
+        default="50m",
+        choices=["prototype", "11m", "25m", "50m"],
+        help="Model architecture scale: 'prototype' (~808k), '11m' (~11M), '25m' (~25.8M), or '50m' (~51.6M) (default: 50m)",
     )
     parser.add_argument(
         "--demo-tokenizer",
@@ -244,6 +252,12 @@ def parse_args():
         const=10,
         default=None,
         help="Display top running processes sorted by memory consumption (default: 10) (Phase 9)",
+    )
+    parser.add_argument(
+        "subcommand",
+        nargs="?",
+        default=None,
+        help="Optional command to execute (e.g. 'chat', 'system', 'info')",
     )
     return parser.parse_args()
 
@@ -545,8 +559,12 @@ def run_train_stage2(
     val_text = load_text_file(val_file)
 
     logger.info(f"Tokenizing Stage 2 text (train: {len(train_text):,} chars, val: {len(val_text):,} chars)...")
-    train_ds, val_ds = prepare_datasets_from_splits(
-        train_text, val_text, tokenizer=tokenizer, seq_len=block_size, stride=stride
+    from robbie.core.data.answer_dataset import AnswerDataset, conversations_from_text
+    train_ds = AnswerDataset(conversations_from_text(train_text), tokenizer, block_size)
+    val_ds = AnswerDataset(conversations_from_text(val_text), tokenizer, block_size)
+    logger.info(
+        f"Assistant-only fine-tuning; skipped overlong answers: "
+        f"train={train_ds.skipped}, validation={val_ds.skipped}"
     )
     logger.info(f"Dataset split: {len(train_ds):,} training sequences, {len(val_ds):,} validation sequences")
 
@@ -583,9 +601,8 @@ def run_train_stage2(
     best_path = CHECKPOINT_DIR / save_ckpt_name
     latest_path = CHECKPOINT_DIR / "latest_model.pt"
     # Ensure the conversational checkpoint retains the fully aligned weights
-    if latest_path.exists():
-        import shutil
-        shutil.copy2(latest_path, best_path)
+    # Trainer already saves the best validation checkpoint. Do not replace it
+    # with a potentially worse final epoch.
 
     best_loss = history.get("best_val_loss", "N/A")
     loss_disp = f"{best_loss:.4f}" if isinstance(best_loss, float) else str(best_loss)
@@ -705,6 +722,10 @@ def run_generate(
         is_transformer = any("blocks" in k for k in state_keys)
         model_type = "transformer" if is_transformer else "tiny"
     else:
+        stage2_300m_ckpt = CHECKPOINT_DIR / "stage2_300m_conversational_transformer.pt"
+        stage2_300m_best = CHECKPOINT_DIR / "chat_300m_v1" / "best_model.pt"
+        stage2_50m_ckpt = CHECKPOINT_DIR / "stage2_50m_conversational_transformer.pt"
+        stage1_50m_ckpt = CHECKPOINT_DIR / "stage1_50m_base_transformer.pt"
         stage2_25m_ckpt = CHECKPOINT_DIR / "stage2_25m_conversational_transformer.pt"
         stage1_25m_ckpt = CHECKPOINT_DIR / "stage1_25m_base_transformer.pt"
         stage2_11m_ckpt = CHECKPOINT_DIR / "stage2_11m_conversational_transformer.pt"
@@ -715,6 +736,10 @@ def run_generate(
         tiny_ckpt = CHECKPOINT_DIR / "best_model.pt"
 
         available_transformers = [
+            stage2_300m_ckpt,
+            stage2_300m_best,
+            stage2_50m_ckpt,
+            stage1_50m_ckpt,
             stage2_25m_ckpt,
             stage1_25m_ckpt,
             stage2_11m_ckpt,
@@ -836,6 +861,10 @@ def run_chat(
     console.print("   Type 'exit' or 'quit' to end the session.")
     console.print("=" * 60 + "\n")
 
+    stage2_300m_ckpt = CHECKPOINT_DIR / "stage2_300m_conversational_transformer.pt"
+    stage2_300m_best = CHECKPOINT_DIR / "chat_300m_v1" / "best_model.pt"
+    stage2_50m_ckpt = CHECKPOINT_DIR / "stage2_50m_conversational_transformer.pt"
+    stage1_50m_ckpt = CHECKPOINT_DIR / "stage1_50m_base_transformer.pt"
     stage2_25m_ckpt = CHECKPOINT_DIR / "stage2_25m_conversational_transformer.pt"
     stage1_25m_ckpt = CHECKPOINT_DIR / "stage1_25m_base_transformer.pt"
     stage2_11m_ckpt = CHECKPOINT_DIR / "stage2_11m_conversational_transformer.pt"
@@ -845,6 +874,10 @@ def run_chat(
     bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
 
     available_checkpoints = [
+        stage2_300m_ckpt,
+        stage2_300m_best,
+        stage2_50m_ckpt,
+        stage1_50m_ckpt,
         stage2_25m_ckpt,
         stage1_25m_ckpt,
         stage2_11m_ckpt,
@@ -877,9 +910,10 @@ def run_chat(
     elif saved_config is not None:
         config = saved_config
     else:
-        n_layer = 8 if "25m" in selected_ckpt.name else (6 if "11m" in selected_ckpt.name else 4)
-        n_head = 8 if "25m" in selected_ckpt.name else (6 if "11m" in selected_ckpt.name else 4)
-        n_embd = 512 if "25m" in selected_ckpt.name else (384 if "11m" in selected_ckpt.name else 128)
+        n_layer = 24 if "300m" in selected_ckpt.name else (16 if "50m" in selected_ckpt.name else (8 if "25m" in selected_ckpt.name else (6 if "11m" in selected_ckpt.name else 4)))
+        n_head = 16 if "300m" in selected_ckpt.name else (8 if ("50m" in selected_ckpt.name or "25m" in selected_ckpt.name) else (6 if "11m" in selected_ckpt.name else 4))
+        n_embd = 1024 if "300m" in selected_ckpt.name else (512 if ("50m" in selected_ckpt.name or "25m" in selected_ckpt.name) else (384 if "11m" in selected_ckpt.name else 128))
+        block_size = 512 if "300m" in selected_ckpt.name else (384 if "50m" in selected_ckpt.name else block_size)
         config = TransformerConfig(
             vocab_size=tokenizer.vocab_size,
             block_size=block_size,
@@ -894,6 +928,7 @@ def run_chat(
     model.eval()
 
     from robbie.memory import PersistentMemory
+    from robbie.config import CHAT_HISTORY_PATH
 
     memory = PersistentMemory()
     context = ConversationContext(
@@ -901,6 +936,9 @@ def run_chat(
         max_context_tokens=block_size,
         reserved_generation_tokens=max_tokens,
         persistent_memory=memory,
+        history_file=CHAT_HISTORY_PATH,
+        auto_load=True,
+        auto_save=True,
     )
     engine = ChatEngine(
         model=model,
@@ -914,10 +952,12 @@ def run_chat(
     )
 
     console.print(f"[dim]Loaded model: {selected_ckpt.name} on {str(device).upper()}[/]")
+    if context.messages:
+        console.print(f"[dim]Restored active chat history ({len(context.messages)} messages) from [bold cyan]{CHAT_HISTORY_PATH.name}[/][/]")
     user_name = memory.get("user_name")
     if user_name:
         console.print(f"[dim]Welcome back, [bold cyan]{user_name}[/]![/]")
-    console.print("[dim]Commands: /history, /memory, /research, /search, /system, /processes, /clear, /help, exit/quit[/]\n")
+    console.print("[dim]Commands: /history, /memory, /research, /search, /system, /processes, /time, /clear, /delete, /help, exit/quit[/]\n")
 
     while True:
         try:
@@ -953,12 +993,13 @@ def run_eval_conversation(checkpoint: Optional[str] = None):
     console.print("   PROJECT ROBBIE — PHASE 5 CONVERSATION EVALUATION")
     console.print("=" * 65 + "\n")
 
+    stage2_50m_ckpt = CHECKPOINT_DIR / "stage2_50m_conversational_transformer.pt"
     stage2_25m_ckpt = CHECKPOINT_DIR / "stage2_25m_conversational_transformer.pt"
     stage2_11m_ckpt = CHECKPOINT_DIR / "stage2_11m_conversational_transformer.pt"
     stage2_ckpt = CHECKPOINT_DIR / "stage2_conversational_transformer.pt"
     bpe_vocab_file = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
 
-    available_checkpoints = [stage2_25m_ckpt, stage2_11m_ckpt, stage2_ckpt]
+    available_checkpoints = [stage2_50m_ckpt, stage2_25m_ckpt, stage2_11m_ckpt, stage2_ckpt]
 
     if checkpoint is not None:
         selected_ckpt = Path(checkpoint)
@@ -1115,6 +1156,24 @@ def run_processes_report(limit: int = 10):
 def main():
     args = parse_args()
     logger.info(f"Starting Project Robbie (v{__version__})")
+
+    if args.subcommand == "chat":
+        args.chat = True
+    elif args.subcommand in ("system", "sys"):
+        args.system = True
+    elif args.subcommand == "info":
+        args.info = True
+
+    # If no specific action was requested, default to interactive chat
+    has_action = any([
+        args.info, args.demo_tokenizer, args.train_tiny, args.train_transformer,
+        args.train_stage1, args.train_stage2, args.chat, args.eval_conversation,
+        args.compare_checkpoints, args.inspect_baseline, args.benchmark,
+        args.generate is not None, args.research is not None, args.system,
+        args.processes is not None,
+    ])
+    if not has_action:
+        args.chat = True
 
     if args.info:
         report = get_hardware_info()

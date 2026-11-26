@@ -44,6 +44,8 @@ class WorkspaceMonitor:
         if root_path is None:
             # Default to Project_Robbie workspace directory
             root_path = Path.cwd()
+            if not (root_path / ".git").exists() and (root_path / "Project_Robbie" / ".git").exists():
+                root_path = root_path / "Project_Robbie"
         root_path = Path(root_path).resolve()
 
         project_name = root_path.name

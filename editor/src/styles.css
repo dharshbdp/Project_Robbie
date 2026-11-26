@@ -7,6 +7,14 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+.sidebar-model-status[data-connected="false"] .status-dot-pulse {
+  animation: none;
+  background: var(--text-dim);
+  box-shadow: none;
+}
+
+#settings-model-checkpoint { overflow-wrap: anywhere; }
+
 /* ==========================================================================
    1. Design Tokens: Dark Theme (Monochromatic Grey)
    ========================================================================== */
@@ -996,47 +1004,222 @@ html, body {
 }
 
 .code-block-wrapper {
-  margin: 10px 0;
-  background: var(--bg-code);
+  margin: 12px 0;
+  background: var(--bg-code, #0f172a);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
   overflow: hidden;
+}
+
+.code-block-wrapper.chat-code-space {
+  margin: 16px 0;
+  background: #282a2e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.code-block-wrapper.chat-code-space:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
 .code-block-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
-  background: var(--bg-surface-elevated);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-dim);
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
 }
 
-.btn-copy-code {
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 10.5px;
+.code-space-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
-.btn-copy-code:hover {
-  color: var(--text-primary);
+.code-space-icon {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12.5px;
+  color: #8b949e;
+}
+
+.code-space-lang {
+  color: #f0f6fc;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.code-space-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-code-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-code-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0f6fc;
+}
+
+.btn-code-run-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #f0f6fc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-code-run-pill:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #ffffff;
 }
 
 .code-block-content {
-  padding: 10px 12px;
-  font-family: var(--font-mono);
+  padding: 16px 18px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-x: auto;
+  color: #e6edf3;
+  margin: 0;
+  background: transparent;
+  tab-size: 4;
+}
+
+.code-block-content code {
+  font-family: inherit;
+  color: inherit;
+  background: transparent;
+  padding: 0;
+}
+
+/* Python Syntax Highlighting Tokens */
+.tok-kw { color: #f47067; font-weight: 500; }
+.tok-fn { color: #79c0ff; }
+.tok-class { color: #d2a8ff; font-weight: 500; }
+.tok-builtin { color: #d2a8ff; }
+.tok-str { color: #a5d6ff; }
+.tok-num { color: #ffa657; }
+.tok-comment { color: #8b949e; font-style: italic; }
+.tok-bool { color: #f47067; }
+
+/* Interactive Code Run Output Drawer */
+.code-space-output-drawer {
+  display: none;
+  background: #1c1d21;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 10px 16px;
+}
+
+.code-exec-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.code-exec-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: #8b949e;
+}
+
+.code-exec-status {
+  font-size: 10.5px;
+  color: #8b949e;
+}
+
+.code-exec-stdout {
+  margin: 0;
+  font-family: 'JetBrains Mono', Consolas, monospace;
   font-size: 12px;
   line-height: 1.5;
-  overflow-x: auto;
-  color: var(--text-primary);
+  color: #7ee787;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* Chat Markdown Elements */
+.chat-ordered-list {
+  margin: 10px 0 16px 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style-type: decimal;
+}
+
+.chat-li-numbered {
+  line-height: 1.6;
+  color: #e2e8f0;
+  font-size: 13.5px;
+}
+
+.chat-li-numbered::marker {
+  color: #60a5fa;
+  font-weight: 700;
+}
+
+.chat-ul-list {
+  margin: 8px 0 14px 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style-type: disc;
+}
+
+.chat-li-bullet {
+  line-height: 1.55;
+  color: #e2e8f0;
+  font-size: 13.5px;
+}
+
+.chat-inline-code {
+  background: #1e2024;
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.chat-md-h1, .chat-md-h2, .chat-md-h3 {
+  color: #f0f6fc;
+  margin: 14px 0 8px 0;
+  font-weight: 600;
 }
 
 /* Inline Tool Result Cards */

@@ -1,7 +1,5 @@
 """Causal Multi-Head Self-Attention implementation for Project Robbie (Phase 3)."""
 
-import math
-from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -68,18 +66,12 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
 
-        # 3. Scaled dot-product attention scores: (B, n_head, T, T)
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(self.head_dim))
-
-        # 4. Apply causal mask: mask future positions with -inf
-        att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
-
-        # 5. Softmax to get attention probabilities
-        att = F.softmax(att, dim=-1)
-        att = self.attn_dropout(att)
-
-        # 6. Weight values by attention probabilities: (B, n_head, T, head_dim)
-        y = att @ v
+        # PyTorch selects memory-efficient CUDA attention when available. Keep
+        # the legacy mask buffer above so existing checkpoints remain loadable.
+        y = F.scaled_dot_product_attention(
+            q, k, v, is_causal=True,
+            dropout_p=self.attn_dropout.p if self.training else 0.0,
+        )
 
         # 7. Concatenate all heads back together: (B, T, C)
         y = y.transpose(1, 2).contiguous().view(B, T, C)

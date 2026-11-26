@@ -6,6 +6,8 @@ with Robbie's ChatEngine, ComputerAwareness, PersistentMemory, and ResearchAssis
 
 import sys
 import json
+import os
+import contextlib
 from dataclasses import asdict
 from pathlib import Path
 
@@ -14,9 +16,44 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 _cached_engine = None
+_model_info = None
+
+
+def get_memory():
+    from robbie.memory.store import PersistentMemory
+    return PersistentMemory(store_path=os.environ.get("ROBBIE_MEMORY_PATH"))
+
+
+def select_checkpoint(checkpoint_dir: Path) -> Path:
+    explicit = os.environ.get("ROBBIE_CHECKPOINT")
+    if explicit:
+        selected = Path(explicit).expanduser()
+        if not selected.is_absolute():
+            selected = PROJECT_ROOT / selected
+        if not selected.is_file():
+            raise FileNotFoundError(f"Configured Robbie checkpoint does not exist: {selected}")
+        return selected.resolve()
+    trained = sorted(
+        list(checkpoint_dir.glob("answers_*/best_answers.pt"))
+        + list(checkpoint_dir.glob("chat_*/best_chat.pt")),
+        key=lambda path: path.stat().st_mtime, reverse=True,
+    )
+    candidates = [
+        checkpoint_dir / "stage2_300m_conversational_transformer.pt",
+        checkpoint_dir / "chat_300m_v1" / "best_model.pt",
+        checkpoint_dir / "stage2_50m_conversational_transformer.pt",
+    ] + trained + [
+        checkpoint_dir / "stage2_25m_conversational_transformer.pt",
+        checkpoint_dir / "stage2_11m_conversational_transformer.pt",
+        checkpoint_dir / "stage2_conversational_transformer.pt",
+    ]
+    for selected in candidates:
+        if selected.is_file():
+            return selected.resolve()
+    raise FileNotFoundError("No trained Robbie checkpoint found. Train a model or set ROBBIE_CHECKPOINT.")
 
 def get_engine():
-    global _cached_engine
+    global _cached_engine, _model_info
     if _cached_engine is not None:
         return _cached_engine
 
@@ -24,74 +61,119 @@ def get_engine():
     from robbie.config import CHECKPOINT_DIR, DATA_DIR
     from robbie.core.tokenizer import BPETokenizer
     from robbie.core.models.transformer import RobbieTransformer, TransformerConfig
-    from robbie.core.training.trainer import Trainer
     from robbie.core.conversation import ChatEngine, ConversationContext
-    from robbie.memory.store import PersistentMemory
     from robbie.utils.device import get_best_device
 
     vocab_path = CHECKPOINT_DIR / "bpe_stage1_vocab.json"
     tokenizer = BPETokenizer.load(vocab_path)
 
-    ckpt_candidates = [
-        CHECKPOINT_DIR / "stage2_25m_conversational_transformer.pt",
-        CHECKPOINT_DIR / "stage2_conversational_transformer.pt",
-        CHECKPOINT_DIR / "stage1_25m_base_transformer.pt",
-    ]
-    selected_ckpt = None
-    for c in ckpt_candidates:
-        if c.exists():
-            selected_ckpt = c
-            break
-
+    selected_ckpt = select_checkpoint(CHECKPOINT_DIR)
     device = get_best_device()
-    if selected_ckpt:
-        raw_data = torch.load(selected_ckpt, map_location="cpu", weights_only=False)
-        saved_config = raw_data.get("config", None)
-        if isinstance(saved_config, TransformerConfig):
-            config = saved_config
-        elif isinstance(saved_config, dict):
-            config = TransformerConfig(**saved_config)
-        else:
-            config = TransformerConfig(vocab_size=tokenizer.vocab_size, block_size=128, n_layer=8, n_head=8, n_embd=512)
-        model = RobbieTransformer(config)
-        Trainer.load_checkpoint(selected_ckpt, model)
+    raw_data = torch.load(selected_ckpt, map_location="cpu", weights_only=False)
+    saved_config = raw_data.get("config")
+    if isinstance(saved_config, TransformerConfig):
+        config = saved_config
+    elif isinstance(saved_config, dict):
+        config = TransformerConfig(**saved_config)
     else:
-        config = TransformerConfig(vocab_size=tokenizer.vocab_size, block_size=128, n_layer=4, n_head=4, n_embd=128)
-        model = RobbieTransformer(config)
-
+        raise ValueError("The checkpoint has no supported model configuration.")
+    if config.vocab_size != tokenizer.vocab_size:
+        raise ValueError("The checkpoint and BPE tokenizer vocabulary sizes do not match.")
+    model = RobbieTransformer(config)
+    model.load_state_dict(raw_data["model_state_dict"])
     model.to(device)
     model.eval()
+    del raw_data
 
-    memory = PersistentMemory()
+    memory = get_memory()
+    chat_hist_path = Path(os.environ.get("ROBBIE_CHAT_HISTORY_PATH", PROJECT_ROOT / "chat_history.json"))
     context = ConversationContext(
         tokenizer=tokenizer,
-        max_context_tokens=128,
-        reserved_generation_tokens=40,
+        max_context_tokens=config.block_size,
+        reserved_generation_tokens=min(140, config.block_size // 2),
         persistent_memory=memory,
+        history_file=chat_hist_path,
+        auto_load=True,
+        auto_save=True,
     )
     _cached_engine = ChatEngine(
         model=model,
         tokenizer=tokenizer,
         device=device,
         context=context,
-        max_tokens=40,
-        temperature=0.7,
-        top_k=25,
-        repetition_penalty=1.15,
+        max_tokens=min(140, config.block_size // 2),
+        temperature=0.5,
+        top_k=40,
+        repetition_penalty=1.2,
     )
+    parameters = sum(parameter.numel() for parameter in model.parameters())
+    _model_info = {
+        "model": f"Robbie {parameters / 1_000_000:.1f}M",
+        "checkpoint": str(selected_ckpt), "device": str(device),
+        "context_tokens": config.block_size, "max_tokens": _cached_engine.max_tokens,
+        "temperature": _cached_engine.temperature, "parameters": parameters,
+        "loaded": True,
+    }
     return _cached_engine
 
 def handle_chat(payload: dict) -> dict:
     engine = get_engine()
     user_msg = payload.get("message", "")
+    if not isinstance(user_msg, str) or not user_msg.strip():
+        raise ValueError("Enter a message for Robbie.")
     reply = engine.respond(user_msg)
     slots = dict(engine.context.slots)
     return {
         "reply": reply,
         "slots": slots,
         "turns": engine.context.turn_count,
-        "model": "Robbie-25M (Stage 2 Conversational)",
+        **_model_info,
     }
+
+
+def _format_history_message(m) -> dict:
+    d = m.to_dict()
+    from robbie.core.conversation.messages import Role
+    role_str = str(d.get("role", "")).lower().strip()
+    is_assistant = (hasattr(m, "role") and m.role == Role.ASSISTANT) or role_str in ("robbie", "assistant", "ai", "bot")
+    d["ui_role"] = "assistant" if is_assistant else "user"
+    d["role"] = "assistant" if is_assistant else "user"
+    d["display_role"] = "Robbie" if is_assistant else "User"
+    return d
+
+
+def handle_status(_payload: dict) -> dict:
+    engine = get_engine()
+    return {
+        **_model_info,
+        "turns": engine.context.turn_count,
+        "history_file": str(engine.context.history_file) if engine.context.history_file else "",
+        "history": [_format_history_message(m) for m in engine.context.messages],
+    }
+
+
+def handle_reset(payload: dict) -> dict:
+    if _cached_engine is not None:
+        _cached_engine.context.delete_history()
+    else:
+        chat_hist_path = Path(os.environ.get("ROBBIE_CHAT_HISTORY_PATH", PROJECT_ROOT / "chat_history.json"))
+        if chat_hist_path.is_file():
+            chat_hist_path.unlink()
+    return {"status": "cleared", "turns": 0, "history_deleted": True}
+
+
+def handle_get_chat_history(_payload: dict) -> dict:
+    engine = get_engine()
+    return {
+        "file": str(engine.context.history_file) if engine.context.history_file else "",
+        "exists": engine.context.history_file.is_file() if engine.context.history_file else False,
+        "turns": engine.context.turn_count,
+        "messages": [_format_history_message(m) for m in engine.context.messages],
+    }
+
+
+def handle_delete_chat_history(payload: dict) -> dict:
+    return handle_reset(payload)
 
 def handle_system(_payload: dict) -> dict:
     from robbie.system import ComputerAwareness
@@ -102,18 +184,10 @@ def handle_system(_payload: dict) -> dict:
     return data
 
 def handle_memory(payload: dict) -> dict:
-    from robbie.memory.store import PersistentMemory
-    pm = PersistentMemory()
+    pm = get_memory()
     action = payload.get("action", "get")
     if action == "clear":
         pm.clear()
-        return {
-            "status": "cleared",
-            "profile": {},
-            "notes": {},
-            "episodes": [],
-            "episodes_count": 0,
-        }
     elif action == "set":
         key = payload.get("key")
         value = payload.get("value")
@@ -122,18 +196,27 @@ def handle_memory(payload: dict) -> dict:
     elif action == "delete":
         key = payload.get("key")
         if key:
-            pm.delete(key)
+            if not pm.delete(key) and key in pm.notes:
+                del pm.notes[key]
+                pm.save()
     elif action == "add_note":
         title = payload.get("title")
         content = payload.get("content")
         if title and content:
             pm.add_note(title, content)
 
+    if _cached_engine is not None:
+        # The memory UI and chat must use the same current disk state.
+        _cached_engine.context.persistent_memory = pm
+        _cached_engine.context.persistent_slots.clear()
+        _cached_engine.context.persistent_slots.update(pm.list_profile())
+        _cached_engine.context.slots.sync()
     return {
         "profile": pm.profile,
         "notes": pm.notes,
         "episodes": pm.episodes,
         "episodes_count": len(pm.episodes),
+        "session": dict(_cached_engine.context.slots) if _cached_engine is not None else {},
     }
 
 def handle_research(payload: dict) -> dict:
@@ -167,26 +250,21 @@ def handle_research(payload: dict) -> dict:
 
 def handle_execute(payload: dict) -> dict:
     code = payload.get("code", "")
-    import io
-    import contextlib
-    stdout_buf = io.StringIO()
-    stderr_buf = io.StringIO()
-    success = True
-    error_msg = ""
+    import subprocess
+    if not isinstance(code, str):
+        raise ValueError("Python code must be text")
+    environment = {**os.environ, "PYTHONIOENCODING": "utf-8",
+                   "PYTHONPATH": str(PROJECT_ROOT / "src")}
     try:
-        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
-            safe_globals = {"__name__": "__main__", "__builtins__": __builtins__}
-            exec(code, safe_globals)
-    except Exception as e:
-        success = False
-        error_msg = str(e)
-    
-    return {
-        "success": success,
-        "stdout": stdout_buf.getvalue(),
-        "stderr": stderr_buf.getvalue(),
-        "error": error_msg,
-    }
+        result = subprocess.run(
+            [sys.executable, "-u", "-c", code], capture_output=True, text=True,
+            encoding="utf-8", errors="replace", cwd=PROJECT_ROOT, env=environment,
+            timeout=30, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        )
+        return {"success": result.returncode == 0, "stdout": result.stdout,
+                "stderr": result.stderr, "error": "" if result.returncode == 0 else f"Python exited with code {result.returncode}"}
+    except subprocess.TimeoutExpired:
+        return {"success": False, "stdout": "", "stderr": "", "error": "Python execution exceeded 30 seconds."}
 
 def handle_launch(payload: dict) -> dict:
     from robbie.computer.launcher import AppLauncher
@@ -241,7 +319,11 @@ def handle_files(payload: dict) -> dict:
         return {"success": False, "error": f"Unknown file action: {action}"}
 
 HANDLERS = {
+    "status": handle_status,
+    "reset": handle_reset,
     "chat": handle_chat,
+    "get_chat_history": handle_get_chat_history,
+    "delete_chat_history": handle_delete_chat_history,
     "system": handle_system,
     "memory": handle_memory,
     "research": handle_research,
@@ -251,7 +333,49 @@ HANDLERS = {
     "files": handle_files,
 }
 
+def dispatch(command, payload):
+    if not isinstance(payload, dict):
+        raise ValueError("Bridge payload must be a JSON object")
+    handler = HANDLERS.get(command)
+    if handler is None:
+        raise ValueError(f"Unknown bridge command: {command}")
+    # Keep stdout exclusively for the IPC protocol, even if a handler logs.
+    with contextlib.redirect_stdout(sys.stderr):
+        from robbie.utils.logger import logger
+        streams = [(item, item.stream) for item in logger.handlers if hasattr(item, "setStream")]
+        try:
+            for handler_log, _stream in streams:
+                handler_log.stream = sys.stderr
+            return handler(payload)
+        finally:
+            for handler_log, stream in streams:
+                handler_log.stream = stream
+
+
+def serve():
+    """One JSON request and response per line; reuse the model and session."""
+    for line in sys.stdin:
+        request_id = None
+        try:
+            request = json.loads(line)
+            if not isinstance(request, dict):
+                raise ValueError("Bridge request must be an object")
+            request_id = request.get("id")
+            result = dispatch(request.get("command"), request.get("payload", {}))
+        except Exception as error:
+            result = {"error": str(error)}
+        print(json.dumps({"id": request_id, "result": result}, default=str), flush=True)
+
+
 def main():
+    if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if sys.stdin is not None and hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8")
+    os.chdir(PROJECT_ROOT)
+    if "--serve" in sys.argv:
+        serve()
+        return
     if len(sys.argv) < 2:
         print(json.dumps({"error": "No command provided"}))
         return
@@ -266,21 +390,9 @@ def main():
             payload = json.loads(raw_arg)
         except Exception:
             payload = {"message": raw_arg, "topic": raw_arg, "code": raw_arg, "query": raw_arg, "app": raw_arg, "type": raw_arg}
-    elif not sys.stdin.isatty():
-        try:
-            stdin_text = sys.stdin.read().strip()
-            if stdin_text:
-                payload = json.loads(stdin_text)
-        except Exception:
-            pass
-
-    handler = HANDLERS.get(cmd)
-    if not handler:
-        print(json.dumps({"error": f"Unknown command: {cmd}"}))
-        return
 
     try:
-        result = handler(payload)
+        result = dispatch(cmd, payload)
         print(json.dumps(result, default=str))
     except Exception as e:
         print(json.dumps({"error": str(e)}))

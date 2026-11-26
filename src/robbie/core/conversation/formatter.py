@@ -72,12 +72,30 @@ class ConversationFormatter:
 
         return prompt
 
+    def encode_dialogue(self, messages, tokenizer, assistant_eos=False):
+        """Encode a generation prompt, optionally ending past replies with EOS.
+
+        Insert the actual token ID; tokenizing its printed name would produce
+        ordinary subwords with Robbie's existing BPE tokenizer.
+        """
+        if not assistant_eos:
+            return tokenizer.encode(self.format_dialogue(messages), add_special_tokens=False)
+        ids = []
+        for message in messages:
+            ids.extend(tokenizer.encode(self.format_turn(message), add_special_tokens=False))
+            if message.role == Role.ASSISTANT:
+                ids.append(tokenizer.eos_token_id)
+            ids.extend(tokenizer.encode(self.delimiter, add_special_tokens=False))
+        ids.extend(tokenizer.encode(self.assistant_tag, add_special_tokens=False))
+        return ids
+
     def fit_to_context_budget(
         self,
         messages: List[Message],
         tokenizer: Any,
         max_prompt_tokens: int = 100,
         include_system_prompt: bool = False,
+        assistant_eos: bool = False,
     ) -> Tuple[List[Message], str, List[int]]:
         """Prune older turns from messages until formatted prompt fits max_prompt_tokens.
 
@@ -92,6 +110,8 @@ class ConversationFormatter:
             encoded = tokenizer.encode(empty_prompt, add_special_tokens=False)
             return [], empty_prompt, encoded
 
+        use_eos = assistant_eos and getattr(tokenizer, "eos_token_id", None) is not None
+
         # Try keeping from all messages down to just the last message
         for start_idx in range(len(messages)):
             subset = messages[start_idx:]
@@ -100,7 +120,10 @@ class ConversationFormatter:
                 add_generation_prompt=True,
                 include_system_prompt=include_system_prompt,
             )
-            encoded = tokenizer.encode(prompt, add_special_tokens=False)
+            if use_eos:
+                encoded = self.encode_dialogue(subset, tokenizer, assistant_eos=True)
+            else:
+                encoded = tokenizer.encode(prompt, add_special_tokens=False)
             if len(encoded) <= max_prompt_tokens:
                 return subset, prompt, encoded
 
@@ -111,5 +134,8 @@ class ConversationFormatter:
             add_generation_prompt=True,
             include_system_prompt=include_system_prompt,
         )
-        encoded = tokenizer.encode(last_prompt, add_special_tokens=False)
+        if use_eos:
+            encoded = self.encode_dialogue(last_subset, tokenizer, assistant_eos=True)
+        else:
+            encoded = tokenizer.encode(last_prompt, add_special_tokens=False)
         return last_subset, last_prompt, encoded

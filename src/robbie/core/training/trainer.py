@@ -47,6 +47,7 @@ class TrainingConfig:
     early_stopping_patience: Optional[int] = None
     early_stopping_min_delta: float = 1e-4
     device: str = "auto"
+    log_interval: Optional[int] = None
 
 
 class Trainer:
@@ -90,8 +91,11 @@ class Trainer:
         self.model.train()
         total_loss = 0.0
         num_batches = 0
+        total_tokens = 0
         total_batches = len(dataloader)
-        log_interval = max(20, total_batches // 10)  # Log every ~10% or at least every 20 steps
+        log_interval = self.config.log_interval or max(20, total_batches // 10)
+        if log_interval < 1:
+            raise ValueError("log_interval must be positive")
 
         for batch_idx, (x, y) in enumerate(dataloader, 1):
             x, y = x.to(self.device), y.to(self.device)
@@ -114,11 +118,13 @@ class Trainer:
                 if scheduler is not None:
                     scheduler.step()
 
-                total_loss += loss.item()
+                tokens = int((y != -100).sum())
+                total_loss += loss.item() * tokens
+                total_tokens += tokens
                 num_batches += 1
 
                 if batch_idx % log_interval == 0 or batch_idx == total_batches:
-                    avg_loss = total_loss / num_batches
+                    avg_loss = total_loss / max(1, total_tokens)
                     current_lr = self.optimizer.param_groups[0]["lr"]
                     pct = (100.0 * batch_idx) / max(1, total_batches)
                     logger.info(
@@ -126,7 +132,7 @@ class Trainer:
                         f"Loss: {loss.item():.4f} (avg: {avg_loss:.4f}) | LR: {current_lr:.6f}"
                     )
 
-        return total_loss / max(1, num_batches)
+        return total_loss / max(1, total_tokens)
 
     @torch.no_grad()
     def evaluate(self, dataloader: DataLoader) -> float:
@@ -134,16 +140,19 @@ class Trainer:
         self.model.eval()
         total_loss = 0.0
         num_batches = 0
+        total_tokens = 0
 
         for x, y in dataloader:
             x, y = x.to(self.device), y.to(self.device)
             with torch.amp.autocast("cuda", enabled=self.use_amp):
                 _, loss = self.model(x, targets=y)
             if loss is not None:
-                total_loss += loss.item()
+                tokens = int((y != -100).sum())
+                total_loss += loss.item() * tokens
+                total_tokens += tokens
                 num_batches += 1
 
-        return total_loss / max(1, num_batches)
+        return total_loss / max(1, total_tokens)
 
     def fit(self) -> Dict[str, Any]:
         """Execute full training loop with scheduler and early stopping."""

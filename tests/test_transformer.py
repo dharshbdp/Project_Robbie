@@ -282,4 +282,34 @@ class TestRobbieTransformer:
         assert loss is not None
         assert loss.item() > 0.0
 
+    def test_robbie_50m_configuration_and_parameter_count(self):
+        """Verify Robbie-50M architecture dimensions and ~51M-52M parameter scaling."""
+        from robbie.main import MODEL_PRESETS
+        assert "50m" in MODEL_PRESETS
+        preset = MODEL_PRESETS["50m"]
+        assert preset["n_layer"] == 16
+        assert preset["n_head"] == 8
+        assert preset["n_embd"] == 512
+
+        config = TransformerConfig(
+            vocab_size=2048,
+            block_size=384,
+            n_layer=preset["n_layer"],
+            n_head=preset["n_head"],
+            n_embd=preset["n_embd"],
+            dropout=0.05,
+        )
+        model = RobbieTransformer(config)
+        param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        # Robbie-50M has ~51.65M parameters (tied embedding head)
+        assert 50_000_000 < param_count < 53_000_000, f"Unexpected param count: {param_count:,}"
+
+        # Test forward pass with dummy batch
+        x = torch.randint(0, 2048, (2, 16))
+        logits, loss = model(x, targets=x)
+        assert logits.shape == (2, 16, 2048)
+        assert loss is not None
+        assert loss.item() > 0.0
+
 
